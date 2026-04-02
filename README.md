@@ -35,8 +35,8 @@
 ## 4. 팀 역할 분담
 본 프로젝트는 총 3명이 역할을 분담하여 진행한다.
 
-- **UI**: 우형
-- **DB**: 소윤
-- **분석**: 정우
+- **UI**: [우형](https://github.com/Jeongwoohyeong)
+- **DB**: [소윤](https://github.com/soyooon228)
+- **분석**: [정우](https://github.com/shinchamchi0147)
 
 각 팀원은 담당 영역을 중심으로 개발을 진행하되, 데이터 구조, 입출력 형식, 기능 연결 지점 등은 협업을 통해 조율한다.
