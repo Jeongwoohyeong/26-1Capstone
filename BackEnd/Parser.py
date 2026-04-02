@@ -35,7 +35,7 @@ def parseRawDataFile(
         {
             "voltage":     np.ndarray,  # 전압 배열 [V]
             "current":     np.ndarray,  # 전류 배열 [A]
-            "power":       np.ndarray,  # 전력 배열 [W]
+            "powerMeasured": np.ndarray,  # 전력 배열 [W]
             "measTime":    str,         # 측정 시각
             "irradiance":  float,       # 일사량 G1 [W/m²]
             "voc":         float,       # 개방 전압 [V]
@@ -170,7 +170,7 @@ def parseRawDataFile(
     return {
         "voltage":      np.array(voltage),
         "current":      np.array(current),
-        "power":        np.array(power),
+        "powerMeasured": np.array(power),
         "measTime":     metadata.get("measTime", ""),
         "irradiance":   metadata.get("irradiance", 0.0),
         "voc":          metadata.get("voc", 0.0),
