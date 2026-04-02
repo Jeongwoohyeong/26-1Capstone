@@ -1,37 +1,15 @@
 // React 훅: useState(상태관리), useRef(DOM 요소 직접 참조)
 import { useState, useRef } from 'react';
-import { parseMultipleFiles } from '../../utils/csvParser';
 import './FileUpload.css';
 
 // 채널 목록 상수 — 채널 추가/변경 시 여기만 수정
 const CHANNELS = ['Ch1', 'Ch2', 'Ch3'];
-
-// 파싱 결과 테이블에 표시할 컬럼 정의
-const PARSED_COLUMNS = [
-  { key: 'channel', label: '채널' },
-  { key: 'measTime', label: '측정시각' },
-  { key: 'irradiance', label: '일사량' },
-  { key: 'voc', label: 'Voc' },
-  { key: 'isc', label: 'Isc' },
-  { key: 'vmax', label: 'Vmax' },
-  { key: 'imax', label: 'Imax' },
-  { key: 'pmax', label: 'Pmax' },
-  { key: 'fillFactor', label: 'Fill Factor' },
-  { key: 'temp1', label: '온도1' },
-  { key: 'temp2', label: '온도2' },
-  { key: 'temp3', label: '온도3' },
-  { key: 'temp4', label: '온도4' },
-  { key: 'temp5', label: '온도5' },
-  { key: 'ambientTemp', label: '대기온도' },
-];
 
 function FileUpload() {
   // 상태 선언: [현재값, 변경함수] = useState(초기값)
   // 변경함수 호출 시 화면이 자동으로 다시 그려짐
   const [selectedChannel, setSelectedChannel] = useState('');   // 선택된 채널 (''이면 미선택)
   const [uploadedFiles, setUploadedFiles] = useState([]);       // 업로드된 파일 목록
-  const [parsedData, setParsedData] = useState([]);             // 파싱된 데이터 목록
-  const [isParsing, setIsParsing] = useState(false);            // 파싱 진행 중 여부
   const [warning, setWarning] = useState('');                   // 경고 메시지 (''이면 숨김)
   const fileInputRef = useRef(null); // 숨겨진 <input type="file">을 가리키는 참조
 
@@ -73,7 +51,7 @@ function FileUpload() {
         name: file.name,
         size: file.size,
         channel: selectedChannel, // 선택된 채널을 태그로 부착
-        file: file,               // 원본 File 객체 (파싱 시 사용)
+        file: file,               // 원본 File 객체 (서버 전송 시 사용)
       }));
 
     // 중복으로 제외된 파일이 있으면 경고
@@ -90,47 +68,14 @@ function FileUpload() {
     setSelectedChannel('');
   };
 
-  // 업로드된 파일들을 파싱하는 핸들러
-  const handleParse = async () => {
-    if (uploadedFiles.length === 0) {
-      setWarning('파싱할 파일이 없습니다.');
-      return;
-    }
-
-    setIsParsing(true);    // 로딩 상태 시작
-    setWarning('');
-
-    try {
-      // 모든 파일을 비동기로 동시에 파싱
-      const results = await parseMultipleFiles(uploadedFiles);
-
-      // 에러가 있는 파일 확인
-      const errors = results.filter((r) => r.status === 'error');
-      if (errors.length > 0) {
-        setWarning(`${errors.length}개 파일 파싱 실패: ${errors.map((e) => e.fileName).join(', ')}`);
-      }
-
-      // 성공한 결과만 저장
-      const successResults = results.filter((r) => r.status === 'success');
-      setParsedData(successResults);
-    } catch (error) {
-      setWarning(`파싱 중 오류 발생: ${error.message}`);
-    } finally {
-      setIsParsing(false); // 로딩 상태 종료
-    }
-  };
-
   // 개별 파일 삭제: 해당 인덱스만 제외한 새 배열 생성
   const handleRemoveFile = (index) => {
     setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
-    // 파싱 결과도 초기화 (파일 목록이 바뀌었으므로)
-    setParsedData([]);
   };
 
   // 전체 파일 삭제
   const handleClearAll = () => {
     setUploadedFiles([]);
-    setParsedData([]);
     setWarning('');
   };
 
@@ -203,19 +148,9 @@ function FileUpload() {
         <div className="file-list">
           <div className="file-list-header">
             <h3>업로드된 파일 ({uploadedFiles.length}개)</h3>
-            <div className="file-list-actions">
-              {/* 파싱 버튼: 파싱 중이면 비활성화 + 텍스트 변경 */}
-              <button
-                className="parse-button"
-                onClick={handleParse}
-                disabled={isParsing}
-              >
-                {isParsing ? '파싱 중...' : '파싱 실행'}
-              </button>
-              <button className="clear-button" onClick={handleClearAll}>
-                전체 삭제
-              </button>
-            </div>
+            <button className="clear-button" onClick={handleClearAll}>
+              전체 삭제
+            </button>
           </div>
           <table className="file-table">
             <thead>
@@ -245,35 +180,6 @@ function FileUpload() {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {/* 파싱 결과 테이블: 파싱 데이터가 있을 때만 표시 */}
-      {parsedData.length > 0 && (
-        <div className="parsed-result">
-          <h3>파싱 결과 ({parsedData.length}건)</h3>
-          <div className="parsed-table-wrapper">
-            <table className="parsed-table">
-              <thead>
-                <tr>
-                  {/* PARSED_COLUMNS 배열로 헤더 자동 생성 */}
-                  {PARSED_COLUMNS.map((col) => (
-                    <th key={col.key}>{col.label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {parsedData.map((row, index) => (
-                  <tr key={index}>
-                    {/* 각 컬럼의 key로 데이터 접근 */}
-                    {PARSED_COLUMNS.map((col) => (
-                      <td key={col.key}>{row[col.key] ?? '-'}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         </div>
       )}
     </div>
