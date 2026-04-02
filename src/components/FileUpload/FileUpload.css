@@ -1,0 +1,164 @@
+/* 전체 컨테이너: 최대 너비 제한 + 가운데 정렬 */
+.file-upload {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 32px;
+  text-align: left;
+}
+
+.file-upload h2 {
+  margin-bottom: 24px;
+}
+
+/* 채널 선택 영역 */
+.channel-select {
+  margin-bottom: 20px;
+}
+
+.channel-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-h); /* index.css에 정의된 CSS 변수 (다크/라이트 자동 대응) */
+}
+
+/* 라디오 버튼을 가로로 나열 */
+.channel-options {
+  display: flex;  /* 자식 요소를 가로 배치 */
+  gap: 24px;      /* 항목 간 간격 */
+}
+
+.radio-item {
+  display: flex;
+  align-items: center; /* 라디오 버튼과 텍스트 세로 중앙 정렬 */
+  gap: 6px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.radio-item input[type='radio'] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+/* 경고 메시지: 빨간색 배경 + 텍스트 */
+.warning {
+  color: #e53e3e;
+  font-size: 14px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: rgba(229, 62, 62, 0.1); /* 반투명 빨간 배경 */
+  border-radius: 6px;
+}
+
+/* 파일 선택 버튼 영역 */
+.upload-area {
+  margin-bottom: 24px;
+}
+
+/* 기본 file input 숨김 (커스텀 버튼으로 대체) */
+.file-input {
+  display: none;
+}
+
+/* 커스텀 파일 선택 버튼 */
+.select-button {
+  padding: 10px 24px;
+  font-size: 16px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+  transition: border-color 0.2s; /* hover 시 부드러운 색상 전환 */
+}
+
+.select-button:hover {
+  border-color: var(--accent); /* hover 시 강조색 테두리 */
+}
+
+.upload-hint {
+  font-size: 13px;
+  color: var(--text);
+  margin-top: 8px;
+}
+
+/* 업로드된 파일 목록 컨테이너 */
+.file-list {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+/* 목록 헤더: 제목과 전체 삭제 버튼을 양쪽 끝에 배치 */
+.file-list-header {
+  display: flex;
+  justify-content: space-between; /* 좌우 끝 정렬 */
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.file-list-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-h);
+}
+
+/* 전체 삭제 버튼 */
+.clear-button {
+  padding: 4px 12px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.clear-button:hover {
+  border-color: #e53e3e;
+  color: #e53e3e;
+}
+
+/* 파일 목록 테이블 */
+.file-table {
+  width: 100%;
+  border-collapse: collapse; /* 셀 사이 간격 제거 */
+  font-size: 14px;
+}
+
+.file-table th {
+  text-align: left;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.file-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 마지막 행은 하단 테두리 제거 */
+.file-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* 개별 삭제 버튼 */
+.remove-button {
+  padding: 2px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.remove-button:hover {
+  border-color: #e53e3e;
+  color: #e53e3e;
+}
+
