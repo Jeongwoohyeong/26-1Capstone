@@ -161,3 +161,78 @@
   border-color: #e53e3e;
   color: #e53e3e;
 }
+
+/* 파일 목록 헤더 우측 버튼 그룹 */
+.file-list-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 파싱 실행 버튼 */
+.parse-button {
+  padding: 4px 12px;
+  font-size: 13px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.parse-button:hover {
+  background: var(--accent);
+  color: white;
+}
+
+/* 비활성화 상태 (파싱 진행 중) */
+.parse-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 파싱 결과 영역 */
+.parsed-result {
+  margin-top: 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.parsed-result h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  color: var(--text-h);
+}
+
+/* 가로 스크롤 래퍼: 컬럼이 많아서 넘칠 때 스크롤 가능 */
+.parsed-table-wrapper {
+  overflow-x: auto;
+}
+
+/* 파싱 결과 테이블 */
+.parsed-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  white-space: nowrap; /* 셀 내용이 줄바꿈되지 않도록 (가로 스크롤 유도) */
+}
+
+.parsed-table th {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 2px solid var(--border);
+  color: var(--text);
+  font-weight: 600;
+  position: sticky;  /* 가로 스크롤 시 헤더 고정 */
+  top: 0;
+  background: var(--bg);
+}
+
+.parsed-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.parsed-table tr:last-child td {
+  border-bottom: none;
+}
