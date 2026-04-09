@@ -1,5 +1,6 @@
 // React 훅: useState(상태관리), useRef(DOM 요소 직접 참조)
 import { useState, useRef } from 'react';
+import { uploadFiles } from '../../utils/api';
 import './FileUpload.css';
 
 // 채널 목록 상수 — 채널 추가/변경 시 여기만 수정
@@ -10,7 +11,9 @@ function FileUpload() {
   // 변경함수 호출 시 화면이 자동으로 다시 그려짐
   const [selectedChannel, setSelectedChannel] = useState('');   // 선택된 채널 (''이면 미선택)
   const [uploadedFiles, setUploadedFiles] = useState([]);       // 업로드된 파일 목록
+  const [isSending, setIsSending] = useState(false);            // 서버 전송 중 여부
   const [warning, setWarning] = useState('');                   // 경고 메시지 (''이면 숨김)
+  const [successMessage, setSuccessMessage] = useState('');     // 성공 메시지
   const fileInputRef = useRef(null); // 숨겨진 <input type="file">을 가리키는 참조
 
   // 파일 선택 시 호출되는 핸들러
@@ -23,6 +26,7 @@ function FileUpload() {
     }
 
     setWarning('');
+    setSuccessMessage('');
     // event.target.files는 유사배열이라 Array.from()으로 배열 변환
     const files = Array.from(event.target.files);
 
@@ -68,6 +72,42 @@ function FileUpload() {
     setSelectedChannel('');
   };
 
+  // 서버로 파일 전송하는 핸들러
+  const handleSendToServer = async () => {
+    if (uploadedFiles.length === 0) {
+      setWarning('전송할 파일이 없습니다.');
+      return;
+    }
+
+    setIsSending(true);
+    setWarning('');
+    setSuccessMessage('');
+
+    try {
+      // API 호출: 파일들을 채널별로 그룹화하여 서버에 전송
+      const results = await uploadFiles(uploadedFiles);
+
+      // 결과 분석: 성공/실패 건수
+      const successCount = results.filter((r) => !r.error).length;
+      const errorCount = results.filter((r) => r.error).length;
+
+      if (errorCount > 0) {
+        setWarning(`${errorCount}개 파일 저장 실패`);
+      }
+
+      if (successCount > 0) {
+        setSuccessMessage(`${successCount}개 파일이 DB에 저장되었습니다.`);
+      }
+
+      // 전송 완료 후 파일 목록 초기화
+      setUploadedFiles([]);
+    } catch (error) {
+      setWarning(`서버 전송 실패: ${error.message}`);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   // 개별 파일 삭제: 해당 인덱스만 제외한 새 배열 생성
   const handleRemoveFile = (index) => {
     setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
@@ -77,6 +117,7 @@ function FileUpload() {
   const handleClearAll = () => {
     setUploadedFiles([]);
     setWarning('');
+    setSuccessMessage('');
   };
 
   // 파일 크기를 읽기 쉬운 단위로 변환 (B → KB → MB)
@@ -116,6 +157,8 @@ function FileUpload() {
 
       {/* 조건부 렌더링: warning이 빈 문자열이면 표시 안 함 */}
       {warning && <p className="warning">{warning}</p>}
+      {/* 성공 메시지 */}
+      {successMessage && <p className="success">{successMessage}</p>}
 
       {/* 파일 선택 영역 */}
       <div className="upload-area">
@@ -148,9 +191,19 @@ function FileUpload() {
         <div className="file-list">
           <div className="file-list-header">
             <h3>업로드된 파일 ({uploadedFiles.length}개)</h3>
-            <button className="clear-button" onClick={handleClearAll}>
-              전체 삭제
-            </button>
+            <div className="file-list-actions">
+              {/* 서버 전송 버튼: 전송 중이면 비활성화 */}
+              <button
+                className="send-button"
+                onClick={handleSendToServer}
+                disabled={isSending}
+              >
+                {isSending ? '전송 중...' : 'DB에 저장'}
+              </button>
+              <button className="clear-button" onClick={handleClearAll}>
+                전체 삭제
+              </button>
+            </div>
           </div>
           <table className="file-table">
             <thead>

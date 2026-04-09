@@ -27,5 +27,9 @@ dist-ssr
 AGENTS.md
 CLAUDE.md
 
+# Python
+__pycache__/
+*.db
+
 # Raw data
 Data/

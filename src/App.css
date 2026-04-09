@@ -6,3 +6,10 @@
   text-align: center;
   margin-bottom: 32px;
 }
+
+/* 섹션 구분선 */
+.section-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 32px 0;
+}

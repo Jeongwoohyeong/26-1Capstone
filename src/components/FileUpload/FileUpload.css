@@ -162,3 +162,41 @@
   color: #e53e3e;
 }
 
+/* 헤더 우측 버튼 그룹 */
+.file-list-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* DB 저장 버튼 */
+.send-button {
+  padding: 4px 12px;
+  font-size: 13px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.send-button:hover {
+  background: var(--accent);
+  color: white;
+}
+
+/* 전송 중 비활성화 */
+.send-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 성공 메시지 */
+.success {
+  color: #38a169;
+  font-size: 14px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: rgba(56, 161, 105, 0.1);
+  border-radius: 6px;
+}
+
