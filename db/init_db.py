@@ -1,7 +1,7 @@
 import sqlite3
 
 # 1. DB 파일 연결 (없으면 새로 생성됨)
-dbConnection = sqlite3.connect('project.db')
+dbConnection = sqlite3.connect('solar.db')
 dbCursor = dbConnection.cursor()
 
 # 2. schema.sql 파일 읽기
@@ -12,7 +12,7 @@ with open('schema.sql', 'r', encoding='utf-8') as schemaFile:
 try:
     dbCursor.executescript(sqlScript)
     dbConnection.commit()
-    print("성공: project.db 파일이 생성되고 테이블이 만들어졌습니다.")
+    print("성공: solar.db 파일이 생성되고 테이블이 만들어졌습니다.")
 except Exception as error:
     print(f"오류 발생: {error}")
 finally:

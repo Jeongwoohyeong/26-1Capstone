@@ -14,9 +14,10 @@ CREATE TABLE measurementInfo (
     imax REAL,
     pmax REAL,
     fillFactor REAL,
+    centerTemp REAL,
     -- 온도 데이터 
     temp1 REAL, temp2 REAL, temp3 REAL, temp4 REAL, temp5 REAL,ambientTemp REAL,
-    --필터링 및 분석 결과 조건 (0:미달, 1:10쌍, 2:R²미달, 3:2쌍)
+    --필터링 및 분석 결과 조건 [0:사용불가, 1:표준(10쌍+ALL PASS), 2:임시(2쌍+ALL PASS), 3:R²미달]
     caseLevel INTEGER DEFAULT 0
 );
 
@@ -26,6 +27,7 @@ CREATE TABLE ivCurveData (
     measurementId INTEGER NOT NULL,
     vMeasured REAL,
     iMeasured REAL,
+    powerMeasured REAL,
     vStc REAL,
     iStc REAL,
     FOREIGN KEY (measurementId) REFERENCES measurementInfo(measurementId) ON DELETE CASCADE

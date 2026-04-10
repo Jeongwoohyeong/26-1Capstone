@@ -218,57 +218,57 @@ def convertToStc(
 # ════════════════════════════════════════════════════════════════════
 # 더미 데이터 실행 예시
 # ════════════════════════════════════════════════════════════════════
-if __name__ == "__main__":
-    import json
+# if __name__ == "__main__":
+#     import json
 
-    # ── 1. IV_Raw_Data 형태의 더미 I-V 커브 (고전압 영역 포함) ──────
-    dummyVoltage = np.array([
-        0.03, 1.09, 2.16, 3.22, 4.29, 5.35, 6.42, 7.49, 8.54, 9.61,
-        10.67, 11.74, 12.81, 13.88, 14.93, 16.01, 17.06, 18.13, 19.20,
-        20.27, 21.32, 22.40, 23.46, 24.53, 25.59, 26.66, 27.72, 28.79,
-        29.85, 30.92, 31.98, 33.05, 34.11, 35.18, 36.25, 37.32, 38.37,
-        39.45, 40.51, 41.57, 42.64, 43.71, 44.77, 45.84, 46.90, 47.97,
-        49.03, 50.10, 51.16, 51.65,
-    ])
-    dummyCurrent = np.array([
-        4.347, 4.345, 4.343, 4.343, 4.341, 4.339, 4.339, 4.337, 4.334,
-        4.331, 4.329, 4.327, 4.321, 4.317, 4.319, 4.315, 4.314, 4.311,
-        4.309, 4.306, 4.303, 4.300, 4.300, 4.296, 4.293, 4.290, 4.288,
-        4.286, 4.283, 4.280, 4.276, 4.274, 4.269, 4.265, 4.262, 4.262,
-        4.257, 4.253, 4.249, 4.238, 4.203, 4.134, 4.021, 3.839, 3.559,
-        3.137, 2.534, 1.696, 0.608, 0.000,
-    ])
-    dummyIsc = 4.347
-    dummyG1 = 360.2
-    dummyT1 = 20.3  # 온도3 (Ch1 중심 센서)
+#     # ── 1. IV_Raw_Data 형태의 더미 I-V 커브 (고전압 영역 포함) ──────
+#     dummyVoltage = np.array([
+#         0.03, 1.09, 2.16, 3.22, 4.29, 5.35, 6.42, 7.49, 8.54, 9.61,
+#         10.67, 11.74, 12.81, 13.88, 14.93, 16.01, 17.06, 18.13, 19.20,
+#         20.27, 21.32, 22.40, 23.46, 24.53, 25.59, 26.66, 27.72, 28.79,
+#         29.85, 30.92, 31.98, 33.05, 34.11, 35.18, 36.25, 37.32, 38.37,
+#         39.45, 40.51, 41.57, 42.64, 43.71, 44.77, 45.84, 46.90, 47.97,
+#         49.03, 50.10, 51.16, 51.65,
+#     ])
+#     dummyCurrent = np.array([
+#         4.347, 4.345, 4.343, 4.343, 4.341, 4.339, 4.339, 4.337, 4.334,
+#         4.331, 4.329, 4.327, 4.321, 4.317, 4.319, 4.315, 4.314, 4.311,
+#         4.309, 4.306, 4.303, 4.300, 4.300, 4.296, 4.293, 4.290, 4.288,
+#         4.286, 4.283, 4.280, 4.276, 4.274, 4.269, 4.265, 4.262, 4.262,
+#         4.257, 4.253, 4.249, 4.238, 4.203, 4.134, 4.021, 3.839, 3.559,
+#         3.137, 2.534, 1.696, 0.608, 0.000,
+#     ])
+#     dummyIsc = 4.347
+#     dummyG1 = 360.2
+#     dummyT1 = 20.3  # 온도3 (Ch1 중심 센서)
 
-    # ── 2. Rs 자동 계산 ────────────────────────────────────────────
-    print("=" * 60)
-    print("Rs 계산 (6.5절 방법)")
-    rsResult = calculateRs(dummyVoltage, dummyCurrent, dummyIsc, dummyG1)
-    print(f"  Rs = {rsResult['rs']:.6f} Ω")
-    print(f"  R² = {rsResult['rSquared']:.6f}")
-    print(f"  데이터 점: {rsResult['dataPoints']}개")
-    print(f"  Case: {rsResult['case']}")
+#     # ── 2. Rs 자동 계산 ────────────────────────────────────────────
+#     print("=" * 60)
+#     print("Rs 계산 (6.5절 방법)")
+#     rsResult = calculateRs(dummyVoltage, dummyCurrent, dummyIsc, dummyG1)
+#     print(f"  Rs = {rsResult['rs']:.6f} Ω")
+#     print(f"  R² = {rsResult['rSquared']:.6f}")
+#     print(f"  데이터 점: {rsResult['dataPoints']}개")
+#     print(f"  Case: {rsResult['case']}")
 
-    # ── 3. STC 보정 실행 ───────────────────────────────────────────
-    if rsResult["case"] == 0:
-        print("\nRs 계산 실패 (case 0) — STC 보정 불가")
-    else:
-        dfCurve = pd.DataFrame({
-            "G1":   dummyG1,
-            "T1":   dummyT1,
-            "I1":   dummyCurrent,
-            "V1":   dummyVoltage,
-            "Isc1": dummyIsc,
-        })
+#     # ── 3. STC 보정 실행 ───────────────────────────────────────────
+#     if rsResult["case"] == 0:
+#         print("\nRs 계산 실패 (case 0) — STC 보정 불가")
+#     else:
+#         dfCurve = pd.DataFrame({
+#             "G1":   dummyG1,
+#             "T1":   dummyT1,
+#             "I1":   dummyCurrent,
+#             "V1":   dummyVoltage,
+#             "Isc1": dummyIsc,
+#         })
 
-        print(f"\n원본 커브 데이터: {len(dfCurve)}개 포인트")
-        print(f"  G1={dummyG1} W/m², T1={dummyT1}°C, Isc={dummyIsc} A")
+#         print(f"\n원본 커브 데이터: {len(dfCurve)}개 포인트")
+#         print(f"  G1={dummyG1} W/m², T1={dummyT1}°C, Isc={dummyIsc} A")
 
-        print("\n" + "=" * 60)
-        print("STC 보정 결과 (보정절차 1, vStc 오름차순)")
-        results = convertToStc(dfCurve, rs=rsResult["rs"])
-        print(json.dumps(results[:5], indent=2, ensure_ascii=False))
-        print(f"  ... 외 {len(results) - 5}개")
-        print(f"\n총 {len(results)}개 포인트 반환")
+#         print("\n" + "=" * 60)
+#         print("STC 보정 결과 (보정절차 1, vStc 오름차순)")
+#         results = convertToStc(dfCurve, rs=rsResult["rs"])
+#         print(json.dumps(results[:5], indent=2, ensure_ascii=False))
+#         print(f"  ... 외 {len(results) - 5}개")
+#         print(f"\n총 {len(results)}개 포인트 반환")

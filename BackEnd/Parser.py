@@ -201,26 +201,26 @@ def _parseFloat(value: str) -> Optional[float]:
 # ════════════════════════════════════════════════════════════════════
 # 테스트 실행
 # ════════════════════════════════════════════════════════════════════
-if __name__ == "__main__":
-    testFile = (
-        "Result_Data (4)/Result_Data/IV_Data/Ch1/IV_Raw_Data/"
-        "IV_Raw_Data(2026_0311_1640).csv"
-    )
+# if __name__ == "__main__":
+#     testFile = (
+#         "Result_Data (4)/Result_Data/IV_Data/Ch1/IV_Raw_Data/"
+#         "IV_Raw_Data(2026_0311_1640).csv"
+#     )
 
-    data = parseRawDataFile(testFile, channel="Ch1")
+#     data = parseRawDataFile(testFile, channel="Ch1")
 
-    print("=== 파싱 결과 ===")
-    print(f"  측정 시각:   {data['measTime']}")
-    print(f"  일사량 G1:   {data['irradiance']} W/m²")
-    print(f"  Isc:         {data['isc']} A")
-    print(f"  Voc:         {data['voc']} V")
-    print(f"  Vmax:        {data['vmax']} V")
-    print(f"  Imax:        {data['imax']} A")
-    print(f"  Pmax:        {data['pmax']} W")
-    print(f"  Fill Factor: {data['fillFactor']} %")
-    print(f"  중심 온도:   {data['centerTemp']} °C")
-    print(f"  temp1~5:     {data['temp1']}, {data['temp2']}, {data['temp3']}, {data['temp4']}, {data['temp5']}")
-    print(f"  대기 온도:   {data['ambientTemp']} °C")
-    print(f"  커브 포인트: {len(data['voltage'])}개")
-    print(f"  전압 범위:   {data['voltage'].min():.2f} ~ {data['voltage'].max():.2f} V")
-    print(f"  전류 범위:   {data['current'].min():.3f} ~ {data['current'].max():.3f} A")
+#     print("=== 파싱 결과 ===")
+#     print(f"  측정 시각:   {data['measTime']}")
+#     print(f"  일사량 G1:   {data['irradiance']} W/m²")
+#     print(f"  Isc:         {data['isc']} A")
+#     print(f"  Voc:         {data['voc']} V")
+#     print(f"  Vmax:        {data['vmax']} V")
+#     print(f"  Imax:        {data['imax']} A")
+#     print(f"  Pmax:        {data['pmax']} W")
+#     print(f"  Fill Factor: {data['fillFactor']} %")
+#     print(f"  중심 온도:   {data['centerTemp']} °C")
+#     print(f"  temp1~5:     {data['temp1']}, {data['temp2']}, {data['temp3']}, {data['temp4']}, {data['temp5']}")
+#     print(f"  대기 온도:   {data['ambientTemp']} °C")
+#     print(f"  커브 포인트: {len(data['voltage'])}개")
+#     print(f"  전압 범위:   {data['voltage'].min():.2f} ~ {data['voltage'].max():.2f} V")
+#     print(f"  전류 범위:   {data['current'].min():.3f} ~ {data['current'].max():.3f} A")
