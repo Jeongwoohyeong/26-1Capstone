@@ -194,7 +194,7 @@ function ChannelTable({ channel }) {
                 <>
                   {/* I-V 커브 그래프 */}
                   <div className="chart-wrapper">
-                    <ResponsiveContainer width="100%" height={420}>
+                    <ResponsiveContainer width="100%" height={415}>
                       {/*
                         LineChart: recharts의 선 그래프 컴포넌트
                         - 측정값(파란선)과 STC 정규화값(보라선)을 같이 표시
@@ -203,7 +203,7 @@ function ChannelTable({ channel }) {
                       */}
                       <LineChart
                         data={curveData}
-                        margin={{ top: 30, right: 30, left: 20, bottom: 20 }}
+                        margin={{ top: 30, right: 30, left: 20, bottom: 30 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                         <XAxis
@@ -211,7 +211,7 @@ function ChannelTable({ channel }) {
                           label={{
                             value: '전압 (V)',
                             position: 'insideBottom',
-                            offset: -18, // 축 숫자 아래에 라벨 배치 (3px 더 내림)
+                            offset: -18, // 축 숫자 아래에 라벨 배치
                           }}
                           type="number"
                           domain={['auto', 'auto']}
@@ -233,10 +233,10 @@ function ChannelTable({ channel }) {
                             border: '1px solid var(--border)',
                           }}
                         />
-                        {/* Legend: 기본 위치에서 3px 아래로 */}
+                        {/* Legend: bottom을 음수로 설정해서 차트 컨테이너 밖으로 밀어냄 */}
                         <Legend
                           verticalAlign="bottom"
-                          wrapperStyle={{ paddingTop: 3 }}
+                          wrapperStyle={{ bottom: 10 }}
                         />
                         {/* 측정값 곡선 (파란색) */}
                         <Line
@@ -247,15 +247,14 @@ function ChannelTable({ channel }) {
                           dot={false}
                           strokeWidth={2}
                         />
-                        {/* STC 정규화값 곡선 (보라색) - case 0은 vStc/iStc가 null이라 안 그려짐 */}
+                        {/* STC 정규화값 곡선 (붉은색 실선) - case 0은 vStc/iStc가 null이라 안 그려짐 */}
                         <Line
                           type="monotone"
                           dataKey="iStc"
                           name="STC 정규화"
-                          stroke="#aa3bff"
+                          stroke="#e53e3e"
                           dot={false}
                           strokeWidth={2}
-                          strokeDasharray="5 5"
                         />
                       </LineChart>
                     </ResponsiveContainer>
