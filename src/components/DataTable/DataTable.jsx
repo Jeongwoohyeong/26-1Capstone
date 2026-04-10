@@ -27,8 +27,8 @@ const CASE_OPTIONS = [
   { value: null, label: '전체' },
   { value: 1, label: 'Case 1 (표준)' },
   { value: 2, label: 'Case 2 (임시)' },
-  { value: 3, label: 'Case 3 (R²미달)' },
-  { value: 0, label: 'Case 0 (사용불가)' },
+  { value: 3, label: 'Case 3 (R²미달, 사용불가)' },
+  { value: 0, label: 'Case 0 (조건/일사량 미달, 사용불가)' },
 ];
 
 // 측정 정보 테이블 컬럼 정의
