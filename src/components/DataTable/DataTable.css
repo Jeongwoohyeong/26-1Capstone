@@ -111,3 +111,48 @@
 .data-table tbody tr:hover {
   background: var(--accent-bg);
 }
+
+/* 클릭 가능한 행 (커서 모양 변경) */
+.clickable-row {
+  cursor: pointer;
+}
+
+/* 선택된 행 강조 */
+.selected-row {
+  background: var(--accent-bg);
+  font-weight: 600;
+}
+
+.selected-row:hover {
+  background: var(--accent-bg);
+}
+
+/* 정규화 데이터 영역 */
+.curve-section {
+  margin-top: 16px;
+  padding: 16px;
+  border-top: 2px solid var(--accent);
+  background: rgba(170, 59, 255, 0.03);
+  border-radius: 0 0 8px 8px;
+}
+
+.curve-section h4 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+/* 정규화 데이터 테이블은 세로 스크롤도 가능하게 (50행 정도라 적당히) */
+.curve-table-wrapper {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* I-V 커브 그래프 영역 */
+.chart-wrapper {
+  margin-bottom: 16px;
+  padding: 5px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
