@@ -1,0 +1,203 @@
+/* 전체 컨테이너 */
+.data-table-container {
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: 32px;
+}
+
+.data-table-container h2 {
+  margin-bottom: 24px;
+}
+
+/* 채널별 테이블 영역 */
+.channel-table {
+  margin-bottom: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+/* 채널 헤더: 채널명과 case 필터를 양쪽 끝에 배치 */
+.channel-table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.channel-table-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-h);
+}
+
+/* case 필터 드롭다운 */
+.case-filter {
+  padding: 6px 12px;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+/* 에러 메시지 */
+.table-error {
+  color: #e53e3e;
+  font-size: 14px;
+  padding: 8px 12px;
+  background: rgba(229, 62, 62, 0.1);
+  border-radius: 6px;
+}
+
+/* 로딩 메시지 */
+.table-loading {
+  color: var(--text);
+  font-size: 14px;
+  padding: 8px 0;
+}
+
+/* 조회 결과 건수 */
+.data-count {
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+/* 데이터 없음 메시지 */
+.no-data {
+  color: var(--text);
+  font-size: 14px;
+  text-align: center;
+  padding: 24px 0;
+}
+
+/* 가로 스크롤 래퍼: 컬럼이 많을 때 스크롤 가능 */
+.table-wrapper {
+  overflow-x: auto;
+}
+
+/* 측정 데이터 테이블: 7개 행 넘으면 세로 스크롤 */
+.measurement-table-wrapper {
+  max-height: 240px; /* 헤더 + 7행 정도 */
+  overflow-y: auto;
+}
+
+/* 데이터 테이블 */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  white-space: nowrap; /* 셀 내용 줄바꿈 방지 */
+}
+
+.data-table th {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 2px solid var(--border);
+  color: var(--text);
+  font-weight: 600;
+  background: var(--bg);
+  position: sticky; /* 세로 스크롤 시 헤더 고정 */
+  top: 0;
+}
+
+.data-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 마지막 행 하단 테두리 제거 */
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* 행 hover 효과 */
+.data-table tbody tr:hover {
+  background: var(--accent-bg);
+}
+
+/* 클릭 가능한 행 (커서 모양 변경) */
+.clickable-row {
+  cursor: pointer;
+}
+
+/* 선택된 행 강조 */
+.selected-row {
+  background: var(--accent-bg);
+  font-weight: 600;
+}
+
+.selected-row:hover {
+  background: var(--accent-bg);
+}
+
+/* 정규화 데이터 영역 */
+.curve-section {
+  margin-top: 16px;
+  padding: 16px;
+  border-top: 2px solid var(--accent);
+  background: rgba(170, 59, 255, 0.03);
+  border-radius: 0 0 8px 8px;
+}
+
+.curve-section h4 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+/* 정규화 데이터 헤더: 제목 + 토글 버튼을 양쪽 끝에 배치 */
+.curve-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+/* 펼치기/닫기 토글 버튼 */
+.toggle-button {
+  padding: 4px 12px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.toggle-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 정규화 데이터 테이블은 세로 스크롤도 가능하게 (50행 정도라 적당히) */
+.curve-table-wrapper {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* I-V 커브 그래프 영역 */
+.chart-wrapper {
+  margin-bottom: 16px;
+  padding: 5px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+/* 통합 비교 차트 섹션 */
+.combined-chart-section {
+  margin-bottom: 32px;
+  padding: 16px;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  background: rgba(170, 59, 255, 0.03);
+}
+
+.combined-chart-section h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  color: var(--text-h);
+}

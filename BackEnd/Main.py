@@ -23,7 +23,7 @@ app.add_middleware(
 )
 
 # ── DB 연결 ────────────────────────────────────────────────────────
-DATABASE_PATH = "solar.db"
+DATABASE_PATH = "../db/solar.db"
 
 
 def getConnection():
