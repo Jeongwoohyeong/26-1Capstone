@@ -6,7 +6,7 @@ import './FileUpload.css';
 // 채널 목록 상수 — 채널 추가/변경 시 여기만 수정
 const CHANNELS = ['Ch1', 'Ch2', 'Ch3'];
 
-function FileUpload() {
+function FileUpload({ onUploadSuccess }) {
   // 상태 선언: [현재값, 변경함수] = useState(초기값)
   // 변경함수 호출 시 화면이 자동으로 다시 그려짐
   const [selectedChannel, setSelectedChannel] = useState('');   // 선택된 채널 (''이면 미선택)
@@ -97,6 +97,10 @@ function FileUpload() {
 
       if (successCount > 0) {
         setSuccessMessage(`${successCount}개 파일이 DB에 저장되었습니다.`);
+        // 부모에게 업로드 성공 알림 → DataTable 재조회 트리거
+        if (onUploadSuccess) {
+          onUploadSuccess();
+        }
       }
 
       // 전송 완료 후 파일 목록 초기화

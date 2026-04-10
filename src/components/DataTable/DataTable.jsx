@@ -67,6 +67,7 @@ const CURVE_COLUMNS = [
  */
 function ChannelTable({
   channel,
+  refreshKey,
   selectedMeasurementId,
   curveData,
   isCurveLoading,
@@ -102,7 +103,7 @@ function ChannelTable({
 
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channel, selectedCase]);
+  }, [channel, selectedCase, refreshKey]);
 
   // 측정 행 클릭 시 부모 콜백 호출
   const handleRowClick = (measurementId) => {
@@ -323,7 +324,7 @@ const buildCombinedChartData = (curveDataByChannel) => {
 /**
  * 메인 DataTable 컴포넌트 — 채널별 3개 테이블 + 통합 비교 차트 렌더링
  */
-function DataTable() {
+function DataTable({ refreshKey }) {
   // 채널별 선택 상태: { Ch1: measurementId, Ch2: ..., Ch3: ... }
   const [selectionByChannel, setSelectionByChannel] = useState({
     Ch1: null,
@@ -404,6 +405,7 @@ function DataTable() {
         <ChannelTable
           key={channel}
           channel={channel}
+          refreshKey={refreshKey}
           selectedMeasurementId={selectionByChannel[channel]}
           curveData={curveDataByChannel[channel]}
           isCurveLoading={loadingByChannel[channel]}
