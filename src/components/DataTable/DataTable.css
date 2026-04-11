@@ -156,6 +156,12 @@
   margin-bottom: 12px;
 }
 
+/* 정규화 데이터 헤더 우측 버튼 그룹 (이미지 저장 + 펼치기/닫기) */
+.curve-section-actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* 펼치기/닫기 토글 버튼 */
 .toggle-button {
   padding: 4px 12px;
@@ -170,6 +176,34 @@
 .toggle-button:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* 이미지 저장 버튼: 에메랄드 그린 (저장/다운로드 행위 연상) */
+.download-button {
+  padding: 4px 12px;
+  font-size: 13px;
+  border: 1px solid #059669;
+  border-radius: 4px;
+  background: #10b981;
+  color: white;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.download-button:hover {
+  background: #059669;
+}
+
+/* 통합 차트 헤더: 제목 + 이미지 저장 버튼 */
+.combined-chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.combined-chart-header h3 {
+  margin: 0;
 }
 
 /* 정규화 데이터 테이블은 세로 스크롤도 가능하게 (50행 정도라 적당히) */

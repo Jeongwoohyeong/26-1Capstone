@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   LineChart,
   Line,
@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { fetchMeasurements, fetchCurveData } from '../../utils/api';
+import { downloadChartAsPng } from '../../utils/downloadChart';
 import './DataTable.css';
 
 // 채널 목록
@@ -60,6 +61,40 @@ const CURVE_COLUMNS = [
 ];
 
 /**
+ * 측정 시각 문자열을 파일명용 형식으로 변환
+ * 입력: "2024-10-25 오후 4:33:04" 또는 "2024-10-25 오전 9:15:00"
+ * 출력: "20241025_163304"
+ */
+const formatMeasTimeForFilename = (measTime) => {
+  if (!measTime) return 'unknown';
+
+  // 공백으로 분리: [날짜, 오전/오후, 시간]
+  const parts = measTime.trim().split(/\s+/);
+  if (parts.length < 3) return 'unknown';
+
+  const [datePart, ampm, timePart] = parts;
+  const dateFormatted = datePart.replace(/-/g, ''); // "2024-10-25" → "20241025"
+
+  const [hourStr, minuteStr, secondStr] = timePart.split(':');
+  let hour = parseInt(hourStr, 10);
+
+  // 12시간제 → 24시간제 변환
+  // 오후 1~11시 = +12, 오후 12시 = 12 그대로
+  // 오전 12시 = 0시, 오전 1~11시 = 그대로
+  if (ampm === '오후' && hour !== 12) {
+    hour += 12;
+  } else if (ampm === '오전' && hour === 12) {
+    hour = 0;
+  }
+
+  const hh = String(hour).padStart(2, '0');
+  const mm = (minuteStr || '00').padStart(2, '0');
+  const ss = (secondStr || '00').padStart(2, '0');
+
+  return `${dateFormatted}_${hh}${mm}${ss}`;
+};
+
+/**
  * 채널 하나의 데이터를 표시하는 개별 테이블 컴포넌트
  *
  * 부모(DataTable)로부터 selection 상태를 받아서 사용 (state lifting)
@@ -81,6 +116,9 @@ function ChannelTable({
   const [selectedCase, setSelectedCase] = useState(null);     // 선택된 case 필터
   const [isLoading, setIsLoading] = useState(false);          // 측정 목록 로딩 상태
   const [error, setError] = useState('');                     // 측정 목록 에러
+
+  // 차트 DOM 요소 참조 (이미지 저장 시 SVG 추출용)
+  const chartRef = useRef(null);
 
   // 채널 또는 case 필터 변경 시 측정 목록 재조회
   useEffect(() => {
@@ -177,15 +215,36 @@ function ChannelTable({
       {/* 정규화 커브 데이터 표시 영역 (측정 선택 시에만 표시) */}
       {selectedMeasurementId !== null && (
         <div className="curve-section">
-          {/* 헤더: 제목 + 펼치기/닫기 토글 버튼 */}
+          {/* 헤더: 제목 + 이미지 저장 + 펼치기/닫기 토글 버튼 */}
           <div className="curve-section-header">
             <h4>정규화 데이터 (측정 ID: {selectedMeasurementId})</h4>
-            <button
-              className="toggle-button"
-              onClick={() => onToggleExpand(channel)}
-            >
-              {isCurveExpanded ? '닫기 ▲' : '펼치기 ▼'}
-            </button>
+            <div className="curve-section-actions">
+              {/* 이미지 저장 버튼: 차트가 있을 때만 활성화 */}
+              {isCurveExpanded && curveData && curveData.length > 0 && (
+                <button
+                  className="download-button"
+                  onClick={() => {
+                    // 선택된 측정의 measTime을 찾아서 파일명에 사용
+                    const measurement = data.find(
+                      (row) => row.measurementId === selectedMeasurementId
+                    );
+                    const timeStr = formatMeasTimeForFilename(measurement?.measTime);
+                    downloadChartAsPng(
+                      chartRef.current,
+                      `${channel}_${timeStr}_${selectedMeasurementId}`
+                    );
+                  }}
+                >
+                  이미지 저장
+                </button>
+              )}
+              <button
+                className="toggle-button"
+                onClick={() => onToggleExpand(channel)}
+              >
+                {isCurveExpanded ? '닫기 ▲' : '펼치기 ▼'}
+              </button>
+            </div>
           </div>
 
           {/* 펼친 상태일 때만 데이터 표시 */}
@@ -197,7 +256,7 @@ function ChannelTable({
               {curveData && curveData.length > 0 ? (
                 <>
                   {/* 채널별 I-V 커브 그래프 (측정값 + STC) */}
-                  <div className="chart-wrapper">
+                  <div className="chart-wrapper" ref={chartRef}>
                     <ResponsiveContainer width="100%" height={415}>
                       <LineChart
                         data={curveData}
@@ -325,6 +384,9 @@ const buildCombinedChartData = (curveDataByChannel) => {
  * 메인 DataTable 컴포넌트 — 채널별 3개 테이블 + 통합 비교 차트 렌더링
  */
 function DataTable({ refreshKey }) {
+  // 통합 차트 DOM 요소 참조 (이미지 저장용)
+  const combinedChartRef = useRef(null);
+
   // 채널별 선택 상태: { Ch1: measurementId, Ch2: ..., Ch3: ... }
   const [selectionByChannel, setSelectionByChannel] = useState({
     Ch1: null,
@@ -419,11 +481,24 @@ function DataTable({ refreshKey }) {
 
       {/* 통합 STC 비교 차트: 항상 표시 (선택된 데이터 없으면 빈 차트) */}
       <div className="combined-chart-section">
-        <h3>채널별 STC 정규화 IV 커브 비교</h3>
+        <div className="combined-chart-header">
+          <h3>채널별 STC 정규화 IV 커브 비교</h3>
+          {/* 이미지 저장 버튼: 데이터가 있을 때만 활성화 */}
+          {channelsWithStcData.length > 0 && (
+            <button
+              className="download-button"
+              onClick={() =>
+                downloadChartAsPng(combinedChartRef.current, 'STC_channel_comparison')
+              }
+            >
+              이미지 저장
+            </button>
+          )}
+        </div>
         {channelsWithStcData.length === 0 && (
           <p className="no-data">측정 데이터를 선택하면 STC 정규화 곡선이 표시됩니다.</p>
         )}
-        <div className="chart-wrapper">
+        <div className="chart-wrapper" ref={combinedChartRef}>
           <ResponsiveContainer width="100%" height={415}>
             <LineChart
               data={combinedChartData}
