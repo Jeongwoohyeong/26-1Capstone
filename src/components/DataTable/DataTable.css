@@ -42,6 +42,113 @@
   cursor: pointer;
 }
 
+/* 범위 필터 패널 (시간대 / 일사량 / Pmax) */
+.range-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(170, 59, 255, 0.02);
+}
+
+/* 필터 한 줄 (라벨 + 입력들) */
+.range-filter-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px; /* 그룹 사이 간격 (3개 그룹이 한 줄에 들어가므로 넉넉하게) */
+}
+
+/* 한 줄 안에서 "라벨 + min ~ max"를 하나의 그룹으로 묶어 줄바꿈 방지 */
+.range-filter-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 필터 라벨 */
+.range-filter-label {
+  font-size: 13px;
+  color: var(--text-h);
+  font-weight: 600;
+  min-width: 68px;
+}
+
+/* 두 번째 라벨 (Pmax) 앞쪽 간격 */
+.range-filter-label-gap {
+  margin-left: 16px;
+}
+
+/* 공통 input 스타일 */
+.range-filter-input {
+  padding: 4px 8px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+/* 숫자 input 폭 고정 */
+.range-filter-number {
+  width: 90px;
+}
+
+/* 구분자 (~) */
+.range-filter-sep {
+  color: var(--text);
+  font-size: 13px;
+}
+
+/* 적용/초기화 버튼 영역 (행 오른쪽 끝) */
+.range-filter-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+/* 버튼 전용 행: 상단 필터 행들과의 간격을 살짝 벌려서 구분 */
+.range-filter-buttons-row {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+/* 적용 버튼 (액센트 컬러) */
+.filter-apply-button {
+  padding: 4px 14px;
+  font-size: 13px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent);
+  color: white;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.filter-apply-button:hover {
+  opacity: 0.85;
+}
+
+/* 초기화 버튼 (보조 스타일) */
+.filter-reset-button {
+  padding: 4px 14px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.filter-reset-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* 에러 메시지 */
 .table-error {
   color: #e53e3e;
@@ -156,6 +263,12 @@
   margin-bottom: 12px;
 }
 
+/* 정규화 데이터 헤더 우측 버튼 그룹 (이미지 저장 + 펼치기/닫기) */
+.curve-section-actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* 펼치기/닫기 토글 버튼 */
 .toggle-button {
   padding: 4px 12px;
@@ -170,6 +283,34 @@
 .toggle-button:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* 이미지 저장 버튼: 에메랄드 그린 (저장/다운로드 행위 연상) */
+.download-button {
+  padding: 4px 12px;
+  font-size: 13px;
+  border: 1px solid #059669;
+  border-radius: 4px;
+  background: #10b981;
+  color: white;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.download-button:hover {
+  background: #059669;
+}
+
+/* 통합 차트 헤더: 제목 + 이미지 저장 버튼 */
+.combined-chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.combined-chart-header h3 {
+  margin: 0;
 }
 
 /* 정규화 데이터 테이블은 세로 스크롤도 가능하게 (50행 정도라 적당히) */

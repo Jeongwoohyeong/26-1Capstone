@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   LineChart,
   Line,
@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { fetchMeasurements, fetchCurveData } from '../../utils/api';
+import { downloadChartAsPng } from '../../utils/downloadChart';
 import './DataTable.css';
 
 // 채널 목록
@@ -27,8 +28,8 @@ const CASE_OPTIONS = [
   { value: null, label: '전체' },
   { value: 1, label: 'Case 1 (표준)' },
   { value: 2, label: 'Case 2 (임시)' },
-  { value: 3, label: 'Case 3 (R²미달)' },
-  { value: 0, label: 'Case 0 (사용불가)' },
+  { value: 3, label: 'Case 3 (R²미달, 사용불가)' },
+  { value: 0, label: 'Case 0 (조건/일사량 미달, 사용불가)' },
 ];
 
 // 측정 정보 테이블 컬럼 정의
@@ -60,6 +61,147 @@ const CURVE_COLUMNS = [
 ];
 
 /**
+ * 한국어 12시간제 measTime 문자열을 24시간제 요소로 파싱
+ * 입력: "2024-10-25 오후 4:33:04" 또는 "2024-10-25 오전 9:15:00"
+ * 반환: { year, month, day, hour, minute, second } (모두 number, 실패 시 null)
+ */
+const parseKoreanMeasTime = (measTime) => {
+  if (!measTime) return null;
+
+  // 공백으로 분리: [날짜, 오전/오후, 시간]
+  const parts = measTime.trim().split(/\s+/);
+  if (parts.length < 3) return null;
+
+  const [datePart, ampm, timePart] = parts;
+  const [yearStr, monthStr, dayStr] = datePart.split('-');
+  const [hourStr, minuteStr, secondStr] = timePart.split(':');
+
+  let hour = parseInt(hourStr, 10);
+  // 12시간제 → 24시간제 변환 (오후 12시=12 그대로, 오전 12시=0시)
+  if (ampm === '오후' && hour !== 12) hour += 12;
+  else if (ampm === '오전' && hour === 12) hour = 0;
+
+  return {
+    year: parseInt(yearStr, 10),
+    month: parseInt(monthStr, 10),
+    day: parseInt(dayStr, 10),
+    hour,
+    minute: parseInt(minuteStr || '0', 10),
+    second: parseInt(secondStr || '0', 10),
+  };
+};
+
+/**
+ * measTime 문자열을 Date 객체로 변환 (시간대 범위 필터 비교용)
+ */
+const measTimeToDate = (measTime) => {
+  const p = parseKoreanMeasTime(measTime);
+  if (!p) return null;
+  return new Date(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+};
+
+/**
+ * 측정 시각 문자열을 파일명용 형식으로 변환
+ * 입력: "2024-10-25 오후 4:33:04" / 출력: "20241025_163304"
+ */
+const formatMeasTimeForFilename = (measTime) => {
+  const p = parseKoreanMeasTime(measTime);
+  if (!p) return 'unknown';
+
+  const yyyy = String(p.year);
+  const MM = String(p.month).padStart(2, '0');
+  const dd = String(p.day).padStart(2, '0');
+  const hh = String(p.hour).padStart(2, '0');
+  const mm = String(p.minute).padStart(2, '0');
+  const ss = String(p.second).padStart(2, '0');
+
+  return `${yyyy}${MM}${dd}_${hh}${mm}${ss}`;
+};
+
+/**
+ * 숫자 범위 필터 항목 정의
+ * key: 데이터 행의 필드명, label: UI에 표시할 라벨
+ * 이 배열에만 추가하면 상태/UI/필터 로직이 자동 반영된다
+ */
+const NUMERIC_FILTERS = [
+  { key: 'irradiance', label: '일사량' },
+  { key: 'voc', label: 'Voc' },
+  { key: 'isc', label: 'Isc' },
+  { key: 'vmax', label: 'Vmax' },
+  { key: 'imax', label: 'Imax' },
+  { key: 'pmax', label: 'Pmax' },
+  { key: 'fillFactor', label: 'Fill Factor' },
+  { key: 'ambientTemp', label: '대기온도' },
+];
+
+/**
+ * 필터 UI의 행별 배치 (시간대는 '__time__' 토큰으로 표현)
+ * 각 배열이 한 줄을 이룬다
+ */
+const FILTER_ROWS = [
+  ['__time__', 'irradiance', 'ambientTemp'],   // 환경 조건
+  ['voc', 'isc', 'fillFactor'],                // I-V 커브 한계점 + 품질 지표
+  ['vmax', 'imax', 'pmax'],                    // 최대 출력점 (MPP)
+];
+
+/**
+ * 필터 입력 상태의 초기값 (모든 필드 빈 문자열 = "제한 없음")
+ * 시간대 4필드 + 숫자 필터별 Min/Max 2필드 × N
+ */
+const EMPTY_FILTER = {
+  startDate: '',
+  startTime: '',
+  endDate: '',
+  endTime: '',
+  ...Object.fromEntries(
+    NUMERIC_FILTERS.flatMap(({ key }) => [
+      [`${key}Min`, ''],
+      [`${key}Max`, ''],
+    ])
+  ),
+};
+
+/**
+ * 적용된 필터 조건에 따라 측정 데이터를 걸러낸다
+ * 모든 조건은 AND로 결합, 빈 값은 해당 방향 제한 없음
+ */
+const applyFilters = (rows, filter) => {
+  // 시간대 경계 Date 생성 (날짜만 있고 시간 비었으면 00:00 / 23:59:59 보정)
+  const toDate = (dateStr, timeStr, isEnd) => {
+    if (!dateStr) return null;
+    const time = timeStr || (isEnd ? '23:59:59' : '00:00:00');
+    return new Date(`${dateStr}T${time}`);
+  };
+  const startDt = toDate(filter.startDate, filter.startTime, false);
+  const endDt = toDate(filter.endDate, filter.endTime, true);
+
+  // 숫자 범위 경계를 한 번만 파싱해 캐싱 (빈 문자열 → null)
+  const toNum = (v) => (v === '' || v === null || v === undefined ? null : Number(v));
+  const bounds = NUMERIC_FILTERS.map(({ key }) => ({
+    key,
+    min: toNum(filter[`${key}Min`]),
+    max: toNum(filter[`${key}Max`]),
+  }));
+
+  return rows.filter((row) => {
+    // 시간대 필터
+    if (startDt || endDt) {
+      const rowDt = measTimeToDate(row.measTime);
+      if (!rowDt) return false;
+      if (startDt && rowDt < startDt) return false;
+      if (endDt && rowDt > endDt) return false;
+    }
+    // 숫자 범위 필터들 (Min/Max 각각 검사, null이면 skip)
+    for (const { key, min, max } of bounds) {
+      const value = row[key];
+      if (min !== null && !(value >= min)) return false;
+      if (max !== null && !(value <= max)) return false;
+    }
+    return true;
+  });
+};
+
+/**
  * 채널 하나의 데이터를 표시하는 개별 테이블 컴포넌트
  *
  * 부모(DataTable)로부터 selection 상태를 받아서 사용 (state lifting)
@@ -77,10 +219,18 @@ function ChannelTable({
   onClearSelection,
   onToggleExpand,
 }) {
-  const [data, setData] = useState([]);                       // 측정 정보 목록
+  const [data, setData] = useState([]);                       // 측정 정보 목록 (원본)
   const [selectedCase, setSelectedCase] = useState(null);     // 선택된 case 필터
   const [isLoading, setIsLoading] = useState(false);          // 측정 목록 로딩 상태
   const [error, setError] = useState('');                     // 측정 목록 에러
+
+  // 필터 입력 상태 (draft: 사용자가 입력 중인 값)
+  const [filterDraft, setFilterDraft] = useState(EMPTY_FILTER);
+  // 실제 적용된 필터 (적용 버튼 눌렀을 때 draft를 복사)
+  const [appliedFilter, setAppliedFilter] = useState(EMPTY_FILTER);
+
+  // 차트 DOM 요소 참조 (이미지 저장 시 SVG 추출용)
+  const chartRef = useRef(null);
 
   // 채널 또는 case 필터 변경 시 측정 목록 재조회
   useEffect(() => {
@@ -110,6 +260,27 @@ function ChannelTable({
     onSelect(channel, measurementId);
   };
 
+  // 필터 입력 값 변경 핸들러 (공통)
+  const handleFilterChange = (key, value) => {
+    setFilterDraft((prev) => ({ ...prev, [key]: value }));
+  };
+
+  // 적용 버튼: draft를 적용 상태로 복사 + 선택된 행 해제
+  const handleApplyFilter = () => {
+    setAppliedFilter(filterDraft);
+    onClearSelection(channel);
+  };
+
+  // 초기화 버튼: draft/applied 모두 초기화
+  const handleResetFilter = () => {
+    setFilterDraft(EMPTY_FILTER);
+    setAppliedFilter(EMPTY_FILTER);
+    onClearSelection(channel);
+  };
+
+  // 적용된 필터로 걸러낸 화면용 데이터
+  const filteredData = applyFilters(data, appliedFilter);
+
   return (
     <div className="channel-table">
       <div className="channel-table-header">
@@ -131,6 +302,84 @@ function ChannelTable({
         </select>
       </div>
 
+      {/* 범위 필터 패널: FILTER_ROWS 설정에 따라 행 단위 렌더링 */}
+      <div className="range-filter">
+        {FILTER_ROWS.map((row, rowIdx) => (
+          <div className="range-filter-row" key={rowIdx}>
+            {row.map((token) => {
+              // 시간대 필드: 4개 input (시작 date/time ~ 종료 date/time)
+              if (token === '__time__') {
+                return (
+                  <span key="__time__" className="range-filter-group">
+                    <label className="range-filter-label">시간대</label>
+                    <input
+                      type="date"
+                      className="range-filter-input"
+                      value={filterDraft.startDate}
+                      onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                    />
+                    <input
+                      type="time"
+                      className="range-filter-input"
+                      value={filterDraft.startTime}
+                      onChange={(e) => handleFilterChange('startTime', e.target.value)}
+                    />
+                    <span className="range-filter-sep">~</span>
+                    <input
+                      type="date"
+                      className="range-filter-input"
+                      value={filterDraft.endDate}
+                      onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                    />
+                    <input
+                      type="time"
+                      className="range-filter-input"
+                      value={filterDraft.endTime}
+                      onChange={(e) => handleFilterChange('endTime', e.target.value)}
+                    />
+                  </span>
+                );
+              }
+              // 숫자 범위 필드: NUMERIC_FILTERS에서 라벨 찾아 렌더링
+              const field = NUMERIC_FILTERS.find((f) => f.key === token);
+              if (!field) return null;
+              return (
+                <span key={field.key} className="range-filter-group">
+                  <label className="range-filter-label">{field.label}</label>
+                  <input
+                    type="number"
+                    className="range-filter-input range-filter-number"
+                    placeholder="최소"
+                    value={filterDraft[`${field.key}Min`]}
+                    onChange={(e) => handleFilterChange(`${field.key}Min`, e.target.value)}
+                  />
+                  <span className="range-filter-sep">~</span>
+                  <input
+                    type="number"
+                    className="range-filter-input range-filter-number"
+                    placeholder="최대"
+                    value={filterDraft[`${field.key}Max`]}
+                    onChange={(e) => handleFilterChange(`${field.key}Max`, e.target.value)}
+                  />
+                </span>
+              );
+            })}
+          </div>
+        ))}
+
+        {/* 적용/초기화 버튼: 필터 패널 하단에 배치 */}
+        <div className="range-filter-row range-filter-buttons-row">
+          <div className="range-filter-actions">
+            <button className="filter-apply-button" onClick={handleApplyFilter}>
+              적용
+            </button>
+            <button className="filter-reset-button" onClick={handleResetFilter}>
+              초기화
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* 에러 / 로딩 표시 */}
       {error && <p className="table-error">{error}</p>}
       {isLoading && <p className="table-loading">데이터 조회 중...</p>}
@@ -139,9 +388,11 @@ function ChannelTable({
       {!isLoading && !error && (
         <>
           <p className="data-count">
-            조회 결과: {data.length}건 (행을 클릭하면 정규화 데이터 표시)
+            조회 결과: {filteredData.length}건
+            {filteredData.length !== data.length && ` / 전체 ${data.length}건`}
+            {' '}(행을 클릭하면 정규화 데이터 표시)
           </p>
-          {data.length > 0 ? (
+          {filteredData.length > 0 ? (
             <div className="table-wrapper measurement-table-wrapper">
               <table className="data-table">
                 <thead>
@@ -152,7 +403,7 @@ function ChannelTable({
                   </tr>
                 </thead>
                 <tbody>
-                  {data.map((row) => (
+                  {filteredData.map((row) => (
                     <tr
                       key={row.measurementId}
                       className={`clickable-row ${
@@ -177,15 +428,36 @@ function ChannelTable({
       {/* 정규화 커브 데이터 표시 영역 (측정 선택 시에만 표시) */}
       {selectedMeasurementId !== null && (
         <div className="curve-section">
-          {/* 헤더: 제목 + 펼치기/닫기 토글 버튼 */}
+          {/* 헤더: 제목 + 이미지 저장 + 펼치기/닫기 토글 버튼 */}
           <div className="curve-section-header">
             <h4>정규화 데이터 (측정 ID: {selectedMeasurementId})</h4>
-            <button
-              className="toggle-button"
-              onClick={() => onToggleExpand(channel)}
-            >
-              {isCurveExpanded ? '닫기 ▲' : '펼치기 ▼'}
-            </button>
+            <div className="curve-section-actions">
+              {/* 이미지 저장 버튼: 차트가 있을 때만 활성화 */}
+              {isCurveExpanded && curveData && curveData.length > 0 && (
+                <button
+                  className="download-button"
+                  onClick={() => {
+                    // 선택된 측정의 measTime을 찾아서 파일명에 사용
+                    const measurement = data.find(
+                      (row) => row.measurementId === selectedMeasurementId
+                    );
+                    const timeStr = formatMeasTimeForFilename(measurement?.measTime);
+                    downloadChartAsPng(
+                      chartRef.current,
+                      `${channel}_${timeStr}_${selectedMeasurementId}`
+                    );
+                  }}
+                >
+                  이미지 저장
+                </button>
+              )}
+              <button
+                className="toggle-button"
+                onClick={() => onToggleExpand(channel)}
+              >
+                {isCurveExpanded ? '닫기 ▲' : '펼치기 ▼'}
+              </button>
+            </div>
           </div>
 
           {/* 펼친 상태일 때만 데이터 표시 */}
@@ -197,7 +469,7 @@ function ChannelTable({
               {curveData && curveData.length > 0 ? (
                 <>
                   {/* 채널별 I-V 커브 그래프 (측정값 + STC) */}
-                  <div className="chart-wrapper">
+                  <div className="chart-wrapper" ref={chartRef}>
                     <ResponsiveContainer width="100%" height={415}>
                       <LineChart
                         data={curveData}
@@ -325,6 +597,9 @@ const buildCombinedChartData = (curveDataByChannel) => {
  * 메인 DataTable 컴포넌트 — 채널별 3개 테이블 + 통합 비교 차트 렌더링
  */
 function DataTable({ refreshKey }) {
+  // 통합 차트 DOM 요소 참조 (이미지 저장용)
+  const combinedChartRef = useRef(null);
+
   // 채널별 선택 상태: { Ch1: measurementId, Ch2: ..., Ch3: ... }
   const [selectionByChannel, setSelectionByChannel] = useState({
     Ch1: null,
@@ -419,11 +694,24 @@ function DataTable({ refreshKey }) {
 
       {/* 통합 STC 비교 차트: 항상 표시 (선택된 데이터 없으면 빈 차트) */}
       <div className="combined-chart-section">
-        <h3>채널별 STC 정규화 IV 커브 비교</h3>
+        <div className="combined-chart-header">
+          <h3>채널별 STC 정규화 IV 커브 비교</h3>
+          {/* 이미지 저장 버튼: 데이터가 있을 때만 활성화 */}
+          {channelsWithStcData.length > 0 && (
+            <button
+              className="download-button"
+              onClick={() =>
+                downloadChartAsPng(combinedChartRef.current, 'STC_channel_comparison')
+              }
+            >
+              이미지 저장
+            </button>
+          )}
+        </div>
         {channelsWithStcData.length === 0 && (
           <p className="no-data">측정 데이터를 선택하면 STC 정규화 곡선이 표시됩니다.</p>
         )}
-        <div className="chart-wrapper">
+        <div className="chart-wrapper" ref={combinedChartRef}>
           <ResponsiveContainer width="100%" height={415}>
             <LineChart
               data={combinedChartData}
