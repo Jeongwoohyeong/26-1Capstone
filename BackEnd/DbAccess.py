@@ -6,9 +6,47 @@ CSV 파싱 → Rs 계산 → STC 보정 → DB 저장, DB에서 I-V 커브 데�
 import sqlite3
 import pandas as pd
 from typing import List, Dict, Optional
-from Parser import parseRawDataFile
-from Calculator import calculateRs, convertToStc
+from BackEnd.Parser import parseRawDataFile
+from BackEnd.Calculator import calculateRs, convertToStc
 
+# 동일 (measTime, channel) 조합의 기존 측정 정보 조회
+def findExistingMeasurement(
+    connection: sqlite3.Connection,
+    measTime: str,
+    channel: str,
+) -> Optional[Dict]:
+    """
+    UNIQUE(measTime, channel) 기준으로 기존 측정 정보를 조회한다.
+
+    Parameters
+    ----------
+    connection : SQLite DB 연결 객체
+    measTime   : 측정 시각
+    channel    : 채널명 ("Ch1", "Ch2", "Ch3")
+
+    Returns
+    -------
+    dict or None : 존재하면 {"measurementId", "measTime", "channel", "caseLevel"},
+                   없으면 None
+    """
+    cursor = connection.execute(
+        """
+        SELECT measurementId, measTime, channel, caseLevel
+        FROM measurementInfo
+        WHERE measTime = ? AND channel = ?
+        """,
+        (measTime, channel),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        return None
+
+    return {
+        "measurementId": row[0],
+        "measTime":      row[1],
+        "channel":       row[2],
+        "caseLevel":     row[3],
+    }
 
 # CSV 파일 1개를 파싱 → Rs 계산 → STC 보정 → DB 저장
 def saveData(
@@ -27,12 +65,28 @@ def saveData(
 
     Returns
     -------
-    dict : {"measurementId": int, "case": int}
+    dict : 새로 저장한 경우
+               {"status": "newlySaved", "measurementId": int, "case": int,
+                "measTime": str, "channel": str}
+           이미 동일 (measTime, channel) 조합이 존재하는 경우
+               {"status": "alreadyExists", "measurementId": int,
+                "measTime": str, "channel": str, "caseLevel": int}
     """
     # ── 1. CSV 파싱 ────────────────────────────────────────────────
     data = parseRawDataFile(filePath, channel)
 
-    # ── 2. Rs 계산 + case 분류 ─────────────────────────────────────
+    # ── 2. 중복 검사 ───────────────────────────────────────────────
+    existing = findExistingMeasurement(connection, data["measTime"], channel)
+    if existing is not None:
+        return {
+            "status":        "alreadyExists",
+            "measurementId": existing["measurementId"],
+            "measTime":      existing["measTime"],
+            "channel":       existing["channel"],
+            "caseLevel":     existing["caseLevel"],
+        }
+
+    # ── 3. Rs 계산 + case 분류 ─────────────────────────────────────
     rsResult = calculateRs(
         data["voltage"],
         data["current"],
@@ -40,38 +94,54 @@ def saveData(
         data["irradiance"],
     )
 
-    # ── 3. 측정 정보 테이블에 저장 ─────────────────────────────────
-    cursor = connection.execute(
-        """
-        INSERT INTO measurementInfo (
-            measTime, channel, irradiance, isc, voc, vmax, imax, pmax,
-            fillFactor, centerTemp, temp1, temp2, temp3, temp4, temp5,
-            ambientTemp, caseLevel
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            data["measTime"],
-            channel,
-            data["irradiance"],
-            data["isc"],
-            data["voc"],
-            data["vmax"],
-            data["imax"],
-            data["pmax"],
-            data["fillFactor"],
-            data["centerTemp"],
-            data["temp1"],
-            data["temp2"],
-            data["temp3"],
-            data["temp4"],
-            data["temp5"],
-            data["ambientTemp"],
-            rsResult["case"],
-        ),
-    )
+    # ── 4. 측정 정보 테이블에 저장 ─────────────────────────────────
+    # 2번 중복 검사와 INSERT 사이에 다른 요청이 같은 행을 먼저 넣는
+    # 경쟁조건(race condition)이 있을 수 있어 UNIQUE 제약 위반을 안전망으로 처리.
+    try:
+        cursor = connection.execute(
+            """
+            INSERT INTO measurementInfo (
+                measTime, channel, irradiance, isc, voc, vmax, imax, pmax,
+                fillFactor, centerTemp, temp1, temp2, temp3, temp4, temp5,
+                ambientTemp, caseLevel
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["measTime"],
+                channel,
+                data["irradiance"],
+                data["isc"],
+                data["voc"],
+                data["vmax"],
+                data["imax"],
+                data["pmax"],
+                data["fillFactor"],
+                data["centerTemp"],
+                data["temp1"],
+                data["temp2"],
+                data["temp3"],
+                data["temp4"],
+                data["temp5"],
+                data["ambientTemp"],
+                rsResult["case"],
+            ),
+        )
+    except sqlite3.IntegrityError:
+        connection.rollback()
+        existing = findExistingMeasurement(connection, data["measTime"], channel)
+        if existing is None:
+            # UNIQUE 제약 외의 무결성 오류는 그대로 다시 던짐
+            raise
+        return {
+            "status":        "alreadyExists",
+            "measurementId": existing["measurementId"],
+            "measTime":      existing["measTime"],
+            "channel":       existing["channel"],
+            "caseLevel":     existing["caseLevel"],
+        }
     measurementId = cursor.lastrowid
 
-    # ── 4. STC 보정 (case 0이면 보정 안 함) ────────────────────────
+    # ── 5. STC 보정 (case 0이면 보정 안 함) ────────────────────────
     stcResults = []
     if rsResult["case"] > 0:
         dfCurve = pd.DataFrame({
@@ -83,7 +153,7 @@ def saveData(
         })
         stcResults = convertToStc(dfCurve, rs=rsResult["rs"])
 
-    # ── 5. I-V 커브 테이블에 저장 ──────────────────────────────────
+    # ── 6. I-V 커브 테이블에 저장 ──────────────────────────────────
     for index in range(len(data["voltage"])):
         vMeasured = data["voltage"][index]
         iMeasured = data["current"][index]
@@ -110,7 +180,13 @@ def saveData(
 
     connection.commit()
 
-    return {"measurementId": measurementId, "case": rsResult["case"]}
+    return {
+        "status":        "newlySaved",
+        "measurementId": measurementId,
+        "case":          rsResult["case"],
+        "measTime":      data["measTime"],
+        "channel":       channel,
+    }
 
 
 # 특정 측정 ID의 I-V 커브 데이터 조회
