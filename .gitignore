@@ -38,6 +38,8 @@ BackEnd/dist/
 BackEnd/*.spec
 # 로컬 venv 실행 스크립트 (개인 환경 전용, 공유하지 않음)
 StartBackEnd.bat
+# Electron 패키징 산출물
+release/
 
 # Raw data
 Data/

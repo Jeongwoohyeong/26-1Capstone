@@ -22,6 +22,16 @@
       "dist/**/*",
       "electron/**/*.cjs"
     ],
+    "extraResources": [
+      {
+        "from": "BackEnd/dist/MainServer.exe",
+        "to": "server/MainServer.exe"
+      },
+      {
+        "from": "BackEnd/solar.db",
+        "to": "server/solar.db"
+      }
+    ],
     "win": {
       "target": "portable"
     },
