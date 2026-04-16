@@ -596,7 +596,7 @@ const buildCombinedChartData = (curveDataByChannel) => {
 /**
  * 메인 DataTable 컴포넌트 — 채널별 3개 테이블 + 통합 비교 차트 렌더링
  */
-function DataTable({ refreshKey }) {
+function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
   // 통합 차트 DOM 요소 참조 (이미지 저장용)
   const combinedChartRef = useRef(null);
 
@@ -673,7 +673,20 @@ function DataTable({ refreshKey }) {
 
   return (
     <div className="data-table-container">
-      <h2>측정 데이터 조회</h2>
+      <div className="data-table-header">
+        <h2>측정 데이터 조회</h2>
+        {/* 토글 버튼 + 업로드 패널을 하나의 컨테이너로 묶어 우측 정렬 */}
+        <div className="upload-toggle-wrapper">
+          <button
+            className="upload-toggle-button"
+            onClick={onToggleUpload}
+          >
+            {isUploadOpen ? '파일 업로드 닫기 ▲' : '파일 업로드 ▼'}
+          </button>
+          {/* 파일 업로드 영역 (토글 시에만 표시, 버튼 바로 아래) */}
+          {uploadPanel}
+        </div>
+      </div>
 
       {/* 각 채널별 ChannelTable 렌더링 */}
       {CHANNELS.map((channel) => (
