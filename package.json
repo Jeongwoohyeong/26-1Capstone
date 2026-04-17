@@ -28,8 +28,8 @@
         "to": "server/MainServer.exe"
       },
       {
-        "from": "BackEnd/solar.db",
-        "to": "server/solar.db"
+        "from": "db/schema.sql",
+        "to": "server/schema.sql"
       }
     ],
     "win": {
