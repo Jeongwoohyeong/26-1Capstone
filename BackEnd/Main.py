@@ -15,9 +15,9 @@ from DbAccess import saveData, getCurveData, getMeasurementList, getCurveDataByT
 
 # ── 경로 설정 (개발 환경 / PyInstaller 빌드 환경 분기) ─────────────
 if getattr(sys, 'frozen', False):
-    # PyInstaller exe 실행 시: DB는 exe 옆에 생성
+    # PyInstaller exe 실행 시: DB와 schema.sql 모두 exe 옆 (Electron extraResources) 기준
     DATABASE_PATH = os.path.join(os.path.dirname(sys.executable), 'solar.db')
-    SCHEMA_PATH = os.path.join(sys._MEIPASS, 'db', 'schema.sql')
+    SCHEMA_PATH = os.path.join(os.path.dirname(sys.executable), 'schema.sql')
 else:
     # 개발 환경: 기존 경로 유지
     _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
