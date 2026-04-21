@@ -36,6 +36,8 @@ BackEnd/venv/
 BackEnd/build/
 BackEnd/dist/
 BackEnd/*.spec
+# MainServer.spec 은 패키징 빌드 설정 파일이므로 예외로 추적 (CI 재현성 확보)
+!BackEnd/MainServer.spec
 # 로컬 venv 실행 스크립트 (개인 환경 전용, 공유하지 않음)
 StartBackEnd.bat
 # Electron 패키징 산출물
