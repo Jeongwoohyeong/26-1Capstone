@@ -5,7 +5,7 @@
 #   1. 태그가 main 브랜치 히스토리에 포함되는지 검증 (아니면 중단)
 #   2. Python + Node 환경 셋업
 #   3. MainServer.exe (PyInstaller) 빌드
-#   4. Electron zip 패키지 빌드 (scripts/pack.cjs 로 .lnk 배치 + archiver 압축)
+#   4. Electron zip 패키지 빌드 (electron-builder zip 타겟)
 #   5. zip을 Workflow Artifact 로 업로드
 #   6. 동일 zip을 GitHub Release 에 자동 첨부
 
@@ -18,6 +18,12 @@ on:
 
 permissions:
   contents: write   # GitHub Release 생성 권한
+
+# GitHub Actions 가 액션을 실행할 때 쓰는 내부 Node 런타임을 24 로 지정.
+# 2026-06-02 부터 Node 20 지원이 중단되어 기본적으로 Node 24 로 강제 전환되므로
+# 미리 opt-in 해서 경고를 제거하고 호환성 문제를 선제적으로 노출시킨다.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
@@ -69,7 +75,7 @@ jobs:
       # 패키징 전용 도구는 package.json 에 기록하지 않고 CI/로컬 양쪽에서 동일 버전으로 설치.
       # 팀원이 npm install 시 electron 등 수백 MB 를 받지 않도록 --no-save 유지.
       - name: Install packaging tools (pinned, --no-save)
-        run: npm install --no-save electron@41.2.1 electron-builder@26.8.1 archiver@7.0.1
+        run: npm install --no-save electron@41.2.1 electron-builder@26.8.1
 
       - name: Build Electron zip package
         run: npm run electron:build
