@@ -19,6 +19,12 @@ on:
 permissions:
   contents: write   # GitHub Release 생성 권한
 
+# GitHub Actions 가 액션을 실행할 때 쓰는 내부 Node 런타임을 24 로 지정.
+# 2026-06-02 부터 Node 20 지원이 중단되어 기본적으로 Node 24 로 강제 전환되므로
+# 미리 opt-in 해서 경고를 제거하고 호환성 문제를 선제적으로 노출시킨다.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: windows-latest
