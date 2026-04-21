@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "electron:dev": "vite build && npx electron .",
-    "electron:build": "vite build && npx electron-builder --win dir && node scripts/pack.cjs"
+    "electron:build": "vite build && npx electron-builder --win zip"
   },
   "build": {
     "appId": "com.capstone.solar-analysis",
