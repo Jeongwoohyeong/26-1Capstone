@@ -8,9 +8,43 @@ from fastapi.middleware.cors import CORSMiddleware
 import sqlite3
 import tempfile
 import os
+import sys
 from typing import List, Optional
 from DbAccess import saveData, getCurveData, getMeasurementList, getCurveDataByTime
 
+
+# ── 경로 설정 (개발 환경 / PyInstaller 빌드 환경 분기) ─────────────
+if getattr(sys, 'frozen', False):
+    # PyInstaller exe 실행 시: DB와 schema.sql 모두 exe 옆 (Electron extraResources) 기준
+    DATABASE_PATH = os.path.join(os.path.dirname(sys.executable), 'solar.db')
+    SCHEMA_PATH = os.path.join(os.path.dirname(sys.executable), 'schema.sql')
+else:
+    # 개발 환경: 기존 경로 유지
+    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    DATABASE_PATH = os.path.join(_BASE_DIR, '..', 'db', 'solar.db')
+    SCHEMA_PATH = os.path.join(_BASE_DIR, '..', 'db', 'schema.sql')
+
+
+def initializeDatabase():
+    """DB 파일(solar.db)이 없으면 schema.sql을 읽어 빈 DB를 자동 생성한다."""
+    if os.path.exists(DATABASE_PATH):
+        return
+
+    os.makedirs(os.path.dirname(os.path.abspath(DATABASE_PATH)), exist_ok=True)
+
+    with open(SCHEMA_PATH, 'r', encoding='utf-8') as schemaFile:
+        sqlScript = schemaFile.read()
+
+    connection = sqlite3.connect(DATABASE_PATH)
+    try:
+        connection.executescript(sqlScript)
+        connection.commit()
+        print(f"DB 자동 생성 완료: {DATABASE_PATH}")
+    finally:
+        connection.close()
+
+
+initializeDatabase()
 
 app = FastAPI()
 
@@ -21,9 +55,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# ── DB 연결 ────────────────────────────────────────────────────────
-DATABASE_PATH = "../db/solar.db"
 
 
 def getConnection():

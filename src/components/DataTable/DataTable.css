@@ -5,8 +5,50 @@
   padding: 32px;
 }
 
-.data-table-container h2 {
+/* 헤더: 제목 + 파일 업로드 토글 (우측 상단 고정) */
+.data-table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
   margin-bottom: 24px;
+}
+
+.data-table-header h2 {
+  margin: 0;
+}
+
+/* 토글 버튼 + 업로드 패널을 우측에 묶는 컨테이너 */
+.upload-toggle-wrapper {
+  position: relative;
+}
+
+/* 업로드 패널: 버튼 바로 아래, 우측 정렬 */
+.upload-toggle-wrapper .file-upload {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 10;
+  margin-top: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* 파일 업로드 토글 버튼 */
+.upload-toggle-button {
+  padding: 6px 16px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.upload-toggle-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* 채널별 테이블 영역 */
