@@ -1,5 +1,6 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { spawn, execFileSync } = require('child_process');
 
 let serverProcess = null;
@@ -49,6 +50,20 @@ function stopServer() {
   }
 }
 
+/**
+ * CSV 파일 저장 IPC 핸들러
+ * renderer에서 window.electronAPI.saveCSV(content, filename) 으로 호출
+ */
+ipcMain.handle('save-csv', async (_event, csvContent, defaultFilename) => {
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    defaultPath: defaultFilename,
+    filters: [{ name: 'CSV 파일', extensions: ['csv'] }],
+  });
+  if (canceled || !filePath) return { success: false };
+  fs.writeFileSync(filePath, csvContent, 'utf-8');
+  return { success: true, filePath };
+});
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1400,
@@ -56,6 +71,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, 'preload.cjs'),
     },
   });
 

@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { fetchMeasurements, fetchCurveData } from '../../utils/api';
 import { downloadChartAsPng } from '../../utils/downloadChart';
+import { saveCSV, buildCurveCSV } from '../../utils/saveCSV';
 import './DataTable.css';
 
 // 채널 목록
@@ -531,6 +532,25 @@ function ChannelTable({
               {/* 기준행 상세 데이터 테이블: 기준행이 지정된 경우에만 표시 */}
               {primaryMeasurementId ? (
                 primaryCurveData && primaryCurveData.length > 0 ? (
+                  <>
+                    {/* CSV 내보내기 버튼: 상세 테이블 상단 배치 */}
+                    <div className="curve-export-bar">
+                      <button
+                        className="csv-export-button"
+                        onClick={async () => {
+                          const measurement = data.find(
+                            (row) => row.measurementId === primaryMeasurementId
+                          );
+                          const timeStr = measurement
+                            ? formatMeasTimeForFilename(measurement.measTime)
+                            : String(primaryMeasurementId);
+                          const filename = `${channel}_${timeStr}_normalized.csv`;
+                          await saveCSV(buildCurveCSV(CURVE_COLUMNS, primaryCurveData), filename);
+                        }}
+                      >
+                        CSV 내보내기
+                      </button>
+                    </div>
                   <div className="table-wrapper curve-table-wrapper">
                     <table className="data-table">
                       <thead>
@@ -551,6 +571,7 @@ function ChannelTable({
                       </tbody>
                     </table>
                   </div>
+                  </>
                 ) : (
                   loadingCurveIds.includes(primaryMeasurementId)
                     ? null  // 로딩 중이면 위에서 이미 표시
