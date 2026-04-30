@@ -204,12 +204,14 @@ const applyFilters = (rows, filter) => {
 /**
  * 채널 하나의 데이터를 표시하는 개별 테이블 컴포넌트
  *
- * 부모(DataTable)로부터 selection 상태를 받아서 사용 (state lifting)
- * 행 클릭 시 onSelect 콜백으로 부모에게 알림
+ * 필터 상태는 부모(DataTable)가 관리한다 — appliedFilter, selectedCase를 props로 수신
+ * 측정 데이터 로드 완료 시 onMeasurementsLoaded 콜백으로 부모에게 전달 (일시 매핑용)
  */
 function ChannelTable({
   channel,
   refreshKey,
+  selectedCase,
+  appliedFilter,
   selectedMeasurementId,
   curveData,
   isCurveLoading,
@@ -218,16 +220,11 @@ function ChannelTable({
   onSelect,
   onClearSelection,
   onToggleExpand,
+  onMeasurementsLoaded,
 }) {
   const [data, setData] = useState([]);                       // 측정 정보 목록 (원본)
-  const [selectedCase, setSelectedCase] = useState(null);     // 선택된 case 필터
   const [isLoading, setIsLoading] = useState(false);          // 측정 목록 로딩 상태
   const [error, setError] = useState('');                     // 측정 목록 에러
-
-  // 필터 입력 상태 (draft: 사용자가 입력 중인 값)
-  const [filterDraft, setFilterDraft] = useState(EMPTY_FILTER);
-  // 실제 적용된 필터 (적용 버튼 눌렀을 때 draft를 복사)
-  const [appliedFilter, setAppliedFilter] = useState(EMPTY_FILTER);
 
   // 차트 DOM 요소 참조 (이미지 저장 시 SVG 추출용)
   const chartRef = useRef(null);
@@ -241,11 +238,14 @@ function ChannelTable({
       try {
         const result = await fetchMeasurements(channel, selectedCase);
         setData(result);
-        // 필터가 바뀌면 선택도 초기화 (부모에게 알림)
+        // 로드된 데이터를 부모에게 전달 (종합 그래프 일시 매핑용)
+        onMeasurementsLoaded(channel, result);
+        // 데이터가 바뀌면 선택도 초기화 (부모에게 알림)
         onClearSelection(channel);
       } catch (err) {
         setError(err.message);
         setData([]);
+        onMeasurementsLoaded(channel, []);
       } finally {
         setIsLoading(false);
       }
@@ -260,24 +260,6 @@ function ChannelTable({
     onSelect(channel, measurementId);
   };
 
-  // 필터 입력 값 변경 핸들러 (공통)
-  const handleFilterChange = (key, value) => {
-    setFilterDraft((prev) => ({ ...prev, [key]: value }));
-  };
-
-  // 적용 버튼: draft를 적용 상태로 복사 + 선택된 행 해제
-  const handleApplyFilter = () => {
-    setAppliedFilter(filterDraft);
-    onClearSelection(channel);
-  };
-
-  // 초기화 버튼: draft/applied 모두 초기화
-  const handleResetFilter = () => {
-    setFilterDraft(EMPTY_FILTER);
-    setAppliedFilter(EMPTY_FILTER);
-    onClearSelection(channel);
-  };
-
   // 적용된 필터로 걸러낸 화면용 데이터
   const filteredData = applyFilters(data, appliedFilter);
 
@@ -285,99 +267,6 @@ function ChannelTable({
     <div className="channel-table">
       <div className="channel-table-header">
         <h3>{channel}</h3>
-        {/* case 필터 드롭다운 */}
-        <select
-          className="case-filter"
-          value={selectedCase ?? ''}
-          onChange={(e) => {
-            const value = e.target.value;
-            setSelectedCase(value === '' ? null : Number(value));
-          }}
-        >
-          {CASE_OPTIONS.map((option) => (
-            <option key={option.label} value={option.value ?? ''}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* 범위 필터 패널: FILTER_ROWS 설정에 따라 행 단위 렌더링 */}
-      <div className="range-filter">
-        {FILTER_ROWS.map((row, rowIdx) => (
-          <div className="range-filter-row" key={rowIdx}>
-            {row.map((token) => {
-              // 시간대 필드: 4개 input (시작 date/time ~ 종료 date/time)
-              if (token === '__time__') {
-                return (
-                  <span key="__time__" className="range-filter-group">
-                    <label className="range-filter-label">시간대</label>
-                    <input
-                      type="date"
-                      className="range-filter-input"
-                      value={filterDraft.startDate}
-                      onChange={(e) => handleFilterChange('startDate', e.target.value)}
-                    />
-                    <input
-                      type="time"
-                      className="range-filter-input"
-                      value={filterDraft.startTime}
-                      onChange={(e) => handleFilterChange('startTime', e.target.value)}
-                    />
-                    <span className="range-filter-sep">~</span>
-                    <input
-                      type="date"
-                      className="range-filter-input"
-                      value={filterDraft.endDate}
-                      onChange={(e) => handleFilterChange('endDate', e.target.value)}
-                    />
-                    <input
-                      type="time"
-                      className="range-filter-input"
-                      value={filterDraft.endTime}
-                      onChange={(e) => handleFilterChange('endTime', e.target.value)}
-                    />
-                  </span>
-                );
-              }
-              // 숫자 범위 필드: NUMERIC_FILTERS에서 라벨 찾아 렌더링
-              const field = NUMERIC_FILTERS.find((f) => f.key === token);
-              if (!field) return null;
-              return (
-                <span key={field.key} className="range-filter-group">
-                  <label className="range-filter-label">{field.label}</label>
-                  <input
-                    type="number"
-                    className="range-filter-input range-filter-number"
-                    placeholder="최소"
-                    value={filterDraft[`${field.key}Min`]}
-                    onChange={(e) => handleFilterChange(`${field.key}Min`, e.target.value)}
-                  />
-                  <span className="range-filter-sep">~</span>
-                  <input
-                    type="number"
-                    className="range-filter-input range-filter-number"
-                    placeholder="최대"
-                    value={filterDraft[`${field.key}Max`]}
-                    onChange={(e) => handleFilterChange(`${field.key}Max`, e.target.value)}
-                  />
-                </span>
-              );
-            })}
-          </div>
-        ))}
-
-        {/* 적용/초기화 버튼: 필터 패널 하단에 배치 */}
-        <div className="range-filter-row range-filter-buttons-row">
-          <div className="range-filter-actions">
-            <button className="filter-apply-button" onClick={handleApplyFilter}>
-              적용
-            </button>
-            <button className="filter-reset-button" onClick={handleResetFilter}>
-              초기화
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* 에러 / 로딩 표시 */}
@@ -595,19 +484,36 @@ const buildCombinedChartData = (curveDataByChannel) => {
 
 /**
  * 메인 DataTable 컴포넌트 — 채널별 3개 테이블 + 통합 비교 차트 렌더링
+ *
+ * 필터 상태(selectedCase, filterDraft, appliedFilter)를 최상위에서 관리하여
+ * 모든 채널에 동일한 필터가 적용된다.
+ * 행 선택 시 해당 일시로 다른 채널 데이터를 자동 조회하여 종합 그래프에 표시한다.
  */
 function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
   // 통합 차트 DOM 요소 참조 (이미지 저장용)
   const combinedChartRef = useRef(null);
 
-  // 채널별 선택 상태: { Ch1: measurementId, Ch2: ..., Ch3: ... }
+  // ── 공통 필터 상태 (전체 채널에 동일하게 적용) ──
+  const [selectedCase, setSelectedCase] = useState(null);
+  const [filterDraft, setFilterDraft] = useState(EMPTY_FILTER);
+  const [appliedFilter, setAppliedFilter] = useState(EMPTY_FILTER);
+
+  // ── 채널별 측정 데이터 (종합 그래프 일시 매핑용) ──
+  // ChannelTable이 데이터를 로드할 때 onMeasurementsLoaded 콜백으로 채운다
+  const [measurementsByChannel, setMeasurementsByChannel] = useState({
+    Ch1: [],
+    Ch2: [],
+    Ch3: [],
+  });
+
+  // ── 채널별 선택 상태 (채널 IV 커브용 단일 선택) ──
   const [selectionByChannel, setSelectionByChannel] = useState({
     Ch1: null,
     Ch2: null,
     Ch3: null,
   });
 
-  // 채널별 커브 데이터: { Ch1: [...], Ch2: [...], Ch3: [...] }
+  // ── 채널별 커브 데이터 (채널 IV 커브에 표시) ──
   const [curveDataByChannel, setCurveDataByChannel] = useState({
     Ch1: [],
     Ch2: [],
@@ -625,12 +531,75 @@ function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
     Ch3: true,
   });
 
-  // 측정 행 선택 핸들러: 채널과 measurementId를 받아서 커브 데이터 조회
+  // ── 종합 그래프 전용 커브 데이터 (일시 매핑 결과) ──
+  // 행 클릭 시 해당 measTime으로 모든 채널을 자동 조회한 결과를 저장한다
+  const [combinedChartCurvesByChannel, setCombinedChartCurvesByChannel] = useState({
+    Ch1: [],
+    Ch2: [],
+    Ch3: [],
+  });
+
+  // 종합 그래프를 마지막으로 트리거한 행 정보 (해제 시 종합 그래프 초기화 판단용)
+  const [combinedChartDriver, setCombinedChartDriver] = useState(null);
+  // 형태: { channel: 'Ch1', measurementId: 5 } | null
+
+  // ChannelTable이 데이터를 로드했을 때 measurementsByChannel 업데이트
+  const handleMeasurementsLoaded = (channel, data) => {
+    setMeasurementsByChannel((prev) => ({ ...prev, [channel]: data }));
+  };
+
+  // 필터 입력값 변경 핸들러 (공통)
+  const handleFilterChange = (key, value) => {
+    setFilterDraft((prev) => ({ ...prev, [key]: value }));
+  };
+
+  // 적용 버튼: draft를 적용 상태로 복사 + 모든 채널 선택/커브 해제
+  const handleApplyFilter = () => {
+    setAppliedFilter(filterDraft);
+    setSelectionByChannel({ Ch1: null, Ch2: null, Ch3: null });
+    setCurveDataByChannel({ Ch1: [], Ch2: [], Ch3: [] });
+    setCombinedChartCurvesByChannel({ Ch1: [], Ch2: [], Ch3: [] });
+    setCombinedChartDriver(null);
+  };
+
+  // 초기화 버튼: draft/applied 모두 초기화 + 모든 채널 선택/커브 해제
+  const handleResetFilter = () => {
+    setFilterDraft(EMPTY_FILTER);
+    setAppliedFilter(EMPTY_FILTER);
+    setSelectionByChannel({ Ch1: null, Ch2: null, Ch3: null });
+    setCurveDataByChannel({ Ch1: [], Ch2: [], Ch3: [] });
+    setCombinedChartCurvesByChannel({ Ch1: [], Ch2: [], Ch3: [] });
+    setCombinedChartDriver(null);
+  };
+
+  // Case 변경: 모든 채널 재조회 + 선택/커브 전체 초기화
+  const handleCaseChange = (value) => {
+    setSelectedCase(value === '' ? null : Number(value));
+    setSelectionByChannel({ Ch1: null, Ch2: null, Ch3: null });
+    setCurveDataByChannel({ Ch1: [], Ch2: [], Ch3: [] });
+    setCombinedChartCurvesByChannel({ Ch1: [], Ch2: [], Ch3: [] });
+    setCombinedChartDriver(null);
+  };
+
+  /**
+   * 측정 행 선택 핸들러
+   *
+   * 1. 해당 채널의 커브 데이터를 조회하여 채널 IV 커브에 표시
+   * 2. 선택된 행의 measTime으로 다른 채널을 자동 조회하여 종합 그래프에 표시
+   */
   const handleSelect = async (channel, measurementId) => {
     // 같은 행 다시 클릭 시 토글로 해제
     if (selectionByChannel[channel] === measurementId) {
       setSelectionByChannel((prev) => ({ ...prev, [channel]: null }));
       setCurveDataByChannel((prev) => ({ ...prev, [channel]: [] }));
+      // 이 행이 종합 그래프를 트리거한 행이었다면 종합 그래프도 초기화
+      if (
+        combinedChartDriver?.channel === channel &&
+        combinedChartDriver?.measurementId === measurementId
+      ) {
+        setCombinedChartDriver(null);
+        setCombinedChartCurvesByChannel({ Ch1: [], Ch2: [], Ch3: [] });
+      }
       return;
     }
 
@@ -641,8 +610,41 @@ function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
     setErrorByChannel((prev) => ({ ...prev, [channel]: '' }));
 
     try {
+      // 선택된 채널의 커브 데이터 조회
       const result = await fetchCurveData(measurementId);
       setCurveDataByChannel((prev) => ({ ...prev, [channel]: result }));
+
+      // 종합 그래프 일시 매핑:
+      // 선택된 측정의 measTime으로 다른 채널에서 동일 일시 데이터를 자동 조회한다
+      const selectedMeasurement = measurementsByChannel[channel]
+        .find((m) => m.measurementId === measurementId);
+
+      if (selectedMeasurement) {
+        const { measTime } = selectedMeasurement;
+        setCombinedChartDriver({ channel, measurementId });
+
+        // 모든 채널(선택 채널 포함) 일시 매핑 결과 초기화
+        const newCombinedCurves = { Ch1: [], Ch2: [], Ch3: [] };
+        newCombinedCurves[channel] = result; // 선택 채널은 이미 조회된 결과 재사용
+
+        // 나머지 채널: 같은 measTime의 측정을 찾아 커브 병렬 조회
+        const otherChannels = CHANNELS.filter((ch) => ch !== channel);
+        await Promise.all(
+          otherChannels.map(async (otherCh) => {
+            const matched = measurementsByChannel[otherCh]
+              .find((m) => m.measTime === measTime);
+            if (matched) {
+              try {
+                newCombinedCurves[otherCh] = await fetchCurveData(matched.measurementId);
+              } catch {
+                // 매핑 실패 시 해당 채널은 종합 그래프에서 미표시
+              }
+            }
+          })
+        );
+
+        setCombinedChartCurvesByChannel(newCombinedCurves);
+      }
     } catch (err) {
       setErrorByChannel((prev) => ({ ...prev, [channel]: err.message }));
       setCurveDataByChannel((prev) => ({ ...prev, [channel]: [] }));
@@ -651,7 +653,7 @@ function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
     }
   };
 
-  // 채널 필터 변경 시 해당 채널 선택 해제
+  // 채널 데이터 재조회 시 해당 채널 선택 해제 (ChannelTable useEffect에서 호출)
   const handleClearSelection = (channel) => {
     setSelectionByChannel((prev) => ({ ...prev, [channel]: null }));
     setCurveDataByChannel((prev) => ({ ...prev, [channel]: [] }));
@@ -662,12 +664,12 @@ function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
     setExpandedByChannel((prev) => ({ ...prev, [channel]: !prev[channel] }));
   };
 
-  // 통합 차트 데이터 계산 (선택된 채널들의 STC 곡선 합치기)
-  const combinedChartData = buildCombinedChartData(curveDataByChannel);
+  // 종합 차트 데이터 (일시 매핑 결과 기반)
+  const combinedChartData = buildCombinedChartData(combinedChartCurvesByChannel);
 
-  // 통합 차트에 표시할 채널 (선택된 채널 + STC 데이터가 있는 채널만)
+  // 종합 차트에 표시할 채널 (STC 데이터가 있는 채널만)
   const channelsWithStcData = CHANNELS.filter((channel) => {
-    const data = curveDataByChannel[channel];
+    const data = combinedChartCurvesByChannel[channel];
     return data && data.some((point) => point.vStc !== null);
   });
 
@@ -688,12 +690,111 @@ function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
         </div>
       </div>
 
+      {/* 공통 필터 패널: 모든 채널에 동일한 필터 적용 */}
+      <div className="shared-filter-section">
+        <div className="shared-filter-header">
+          <h3>데이터 필터 (전체 채널 공통)</h3>
+          {/* Case 필터: 공통으로 적용 */}
+          <select
+            className="case-filter"
+            value={selectedCase ?? ''}
+            onChange={(e) => handleCaseChange(e.target.value)}
+          >
+            {CASE_OPTIONS.map((option) => (
+              <option key={option.label} value={option.value ?? ''}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* 범위 필터 패널: FILTER_ROWS 설정에 따라 행 단위 렌더링 */}
+        <div className="range-filter">
+          {FILTER_ROWS.map((row, rowIdx) => (
+            <div className="range-filter-row" key={rowIdx}>
+              {row.map((token) => {
+                // 시간대 필드: 4개 input (시작 date/time ~ 종료 date/time)
+                if (token === '__time__') {
+                  return (
+                    <span key="__time__" className="range-filter-group">
+                      <label className="range-filter-label">시간대</label>
+                      <input
+                        type="date"
+                        className="range-filter-input"
+                        value={filterDraft.startDate}
+                        onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                      />
+                      <input
+                        type="time"
+                        className="range-filter-input"
+                        value={filterDraft.startTime}
+                        onChange={(e) => handleFilterChange('startTime', e.target.value)}
+                      />
+                      <span className="range-filter-sep">~</span>
+                      <input
+                        type="date"
+                        className="range-filter-input"
+                        value={filterDraft.endDate}
+                        onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                      />
+                      <input
+                        type="time"
+                        className="range-filter-input"
+                        value={filterDraft.endTime}
+                        onChange={(e) => handleFilterChange('endTime', e.target.value)}
+                      />
+                    </span>
+                  );
+                }
+                // 숫자 범위 필드: NUMERIC_FILTERS에서 라벨 찾아 렌더링
+                const field = NUMERIC_FILTERS.find((f) => f.key === token);
+                if (!field) return null;
+                return (
+                  <span key={field.key} className="range-filter-group">
+                    <label className="range-filter-label">{field.label}</label>
+                    <input
+                      type="number"
+                      className="range-filter-input range-filter-number"
+                      placeholder="최소"
+                      value={filterDraft[`${field.key}Min`]}
+                      onChange={(e) => handleFilterChange(`${field.key}Min`, e.target.value)}
+                    />
+                    <span className="range-filter-sep">~</span>
+                    <input
+                      type="number"
+                      className="range-filter-input range-filter-number"
+                      placeholder="최대"
+                      value={filterDraft[`${field.key}Max`]}
+                      onChange={(e) => handleFilterChange(`${field.key}Max`, e.target.value)}
+                    />
+                  </span>
+                );
+              })}
+            </div>
+          ))}
+
+          {/* 적용/초기화 버튼: 필터 패널 하단에 배치 */}
+          <div className="range-filter-row range-filter-buttons-row">
+            <div className="range-filter-actions">
+              <button className="filter-apply-button" onClick={handleApplyFilter}>
+                적용
+              </button>
+              <button className="filter-reset-button" onClick={handleResetFilter}>
+                초기화
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* 각 채널별 ChannelTable 렌더링 */}
       {CHANNELS.map((channel) => (
         <ChannelTable
           key={channel}
           channel={channel}
           refreshKey={refreshKey}
+          selectedCase={selectedCase}
+          appliedFilter={appliedFilter}
           selectedMeasurementId={selectionByChannel[channel]}
           curveData={curveDataByChannel[channel]}
           isCurveLoading={loadingByChannel[channel]}
@@ -702,10 +803,11 @@ function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
           onSelect={handleSelect}
           onClearSelection={handleClearSelection}
           onToggleExpand={handleToggleExpand}
+          onMeasurementsLoaded={handleMeasurementsLoaded}
         />
       ))}
 
-      {/* 통합 STC 비교 차트: 항상 표시 (선택된 데이터 없으면 빈 차트) */}
+      {/* 통합 STC 비교 차트: 기준행 선택 시 일시 매핑된 채널 커브를 표시 */}
       <div className="combined-chart-section">
         <div className="combined-chart-header">
           <h3>채널별 STC 정규화 IV 커브 비교</h3>
@@ -722,7 +824,7 @@ function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
           )}
         </div>
         {channelsWithStcData.length === 0 && (
-          <p className="no-data">측정 데이터를 선택하면 STC 정규화 곡선이 표시됩니다.</p>
+          <p className="no-data">측정 데이터를 선택하면 해당 일시의 채널별 STC 정규화 곡선이 표시됩니다.</p>
         )}
         <div className="chart-wrapper" ref={combinedChartRef}>
           <ResponsiveContainer width="100%" height={415}>

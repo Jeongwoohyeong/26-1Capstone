@@ -51,6 +51,28 @@
   color: var(--accent);
 }
 
+/* 공통 필터 패널: 모든 채널 위에 배치 */
+.shared-filter-section {
+  margin-bottom: 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+/* 공통 필터 헤더: 제목 + case 드롭다운을 양쪽 끝에 배치 */
+.shared-filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.shared-filter-header h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
 /* 채널별 테이블 영역 */
 .channel-table {
   margin-bottom: 32px;
