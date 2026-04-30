@@ -23,6 +23,15 @@ const CHANNEL_COLORS = {
   Ch3: '#e53e3e', // 빨강
 };
 
+// 다중 선택 행의 IV 커브 색상 팔레트 (measurementId % 길이 로 할당하여 안정적인 색상 유지)
+const SELECTION_COLORS = [
+  '#3182ce', // 파랑
+  '#805ad5', // 보라
+  '#2f855a', // 초록
+  '#c05621', // 주황
+  '#b83280', // 핑크
+];
+
 // case 레벨 필터 옵션
 const CASE_OPTIONS = [
   { value: null, label: '전체' },
@@ -202,22 +211,52 @@ const applyFilters = (rows, filter) => {
 };
 
 /**
+ * 채널 내 다중 선택된 행들의 커브 데이터를 통합 LineChart용 배열로 변환
+ *
+ * 각 행의 데이터 포인트를 하나의 배열로 합치되 행별로 다른 키를 사용한다.
+ * 예: [{ vMeasured: 1.5, iMeasured_5: 3.2, iStc_5: 3.1, iMeasured_12: 3.0, iStc_12: 2.9 }, ...]
+ * recharts의 connectNulls=true 로 행별 포인트를 자연스럽게 잇는다.
+ */
+const buildChannelCurveData = (selectedIds, curvesMap) => {
+  const combined = [];
+
+  selectedIds.forEach((id) => {
+    const data = curvesMap[id];
+    if (!data || data.length === 0) return;
+
+    data.forEach((point) => {
+      combined.push({
+        vMeasured: point.vMeasured,
+        [`iMeasured_${id}`]: point.iMeasured,
+        [`iStc_${id}`]: point.iStc,
+      });
+    });
+  });
+
+  // X축(vMeasured) 기준 오름차순 정렬
+  combined.sort((a, b) => a.vMeasured - b.vMeasured);
+  return combined;
+};
+
+/**
  * 채널 하나의 데이터를 표시하는 개별 테이블 컴포넌트
  *
- * 필터 상태는 부모(DataTable)가 관리한다 — appliedFilter, selectedCase를 props로 수신
- * 측정 데이터 로드 완료 시 onMeasurementsLoaded 콜백으로 부모에게 전달 (일시 매핑용)
+ * - 행 클릭(onRowClick): 해당 행을 IV 커브 표시 목록에 추가/제거 (토글)
+ * - 라디오(onPrimaryChange): 기준행 지정/해제 (종합 그래프 + 상세 테이블 결정)
+ * - 기준행은 전역 단일 선택 (DataTable에서 관리)
  */
 function ChannelTable({
   channel,
   refreshKey,
   selectedCase,
   appliedFilter,
-  selectedMeasurementId,
-  curveData,
-  isCurveLoading,
-  curveError,
+  selectedIds,           // 이 채널에서 IV 커브에 추가된 ID 배열
+  primaryMeasurementId,  // 이 채널의 기준행 ID (전역 primaryRow에서 계산, 없으면 null)
+  curvesBySelectedId,    // { measurementId: data[] } 이 채널의 커브 데이터 맵
+  loadingCurveIds,       // 현재 커브 조회 중인 ID 배열
   isCurveExpanded,
-  onSelect,
+  onRowClick,
+  onPrimaryChange,
   onClearSelection,
   onToggleExpand,
   onMeasurementsLoaded,
@@ -255,13 +294,30 @@ function ChannelTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel, selectedCase, refreshKey]);
 
-  // 측정 행 클릭 시 부모 콜백 호출
-  const handleRowClick = (measurementId) => {
-    onSelect(channel, measurementId);
+  // 측정 행의 CSS 클래스 결정
+  const getRowClassName = (measurementId) => {
+    const classes = ['clickable-row'];
+    if (measurementId === primaryMeasurementId) {
+      classes.push('selected-row-primary'); // 기준행: 진한 강조
+    } else if (selectedIds.includes(measurementId)) {
+      classes.push('selected-row');         // 선택 행: 옅은 보조
+    }
+    return classes.join(' ');
   };
 
   // 적용된 필터로 걸러낸 화면용 데이터
   const filteredData = applyFilters(data, appliedFilter);
+
+  // 현재 채널에서 커브 데이터가 있는 선택 ID 목록
+  const idsWithCurveData = selectedIds.filter((id) => curvesBySelectedId[id]);
+
+  // 기준행의 커브 데이터 (상세 테이블에 표시)
+  const primaryCurveData = primaryMeasurementId
+    ? (curvesBySelectedId[primaryMeasurementId] || null)
+    : null;
+
+  // 다중 라인 IV 차트 데이터 (선택된 모든 행 합산)
+  const channelCurveChartData = buildChannelCurveData(selectedIds, curvesBySelectedId);
 
   return (
     <div className="channel-table">
@@ -279,13 +335,15 @@ function ChannelTable({
           <p className="data-count">
             조회 결과: {filteredData.length}건
             {filteredData.length !== data.length && ` / 전체 ${data.length}건`}
-            {' '}(행을 클릭하면 정규화 데이터 표시)
+            {' '}(행 클릭: IV 커브 추가 / 라디오: 기준행 지정)
           </p>
           {filteredData.length > 0 ? (
             <div className="table-wrapper measurement-table-wrapper">
               <table className="data-table">
                 <thead>
                   <tr>
+                    {/* 기준행 지정 라디오 버튼 컬럼 */}
+                    <th className="radio-col" title="기준행 지정">기준</th>
                     {TABLE_COLUMNS.map((col) => (
                       <th key={col.key}>{col.label}</th>
                     ))}
@@ -295,11 +353,22 @@ function ChannelTable({
                   {filteredData.map((row) => (
                     <tr
                       key={row.measurementId}
-                      className={`clickable-row ${
-                        selectedMeasurementId === row.measurementId ? 'selected-row' : ''
-                      }`}
-                      onClick={() => handleRowClick(row.measurementId)}
+                      className={getRowClassName(row.measurementId)}
+                      onClick={() => onRowClick(channel, row.measurementId)}
                     >
+                      {/* 라디오 클릭은 행 클릭 이벤트와 분리 */}
+                      <td
+                        className="radio-col"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="radio"
+                          className="primary-radio"
+                          checked={primaryMeasurementId === row.measurementId}
+                          onChange={() => {}}
+                          onClick={() => onPrimaryChange(channel, row.measurementId)}
+                        />
+                      </td>
                       {TABLE_COLUMNS.map((col) => (
                         <td key={col.key}>{row[col.key] ?? '-'}</td>
                       ))}
@@ -314,26 +383,32 @@ function ChannelTable({
         </>
       )}
 
-      {/* 정규화 커브 데이터 표시 영역 (측정 선택 시에만 표시) */}
-      {selectedMeasurementId !== null && (
+      {/* IV 커브 + 상세 데이터 영역 (행이 하나 이상 선택되면 표시) */}
+      {selectedIds.length > 0 && (
         <div className="curve-section">
-          {/* 헤더: 제목 + 이미지 저장 + 펼치기/닫기 토글 버튼 */}
+          {/* 헤더: 제목 + 이미지 저장 + 펼치기/닫기 토글 */}
           <div className="curve-section-header">
-            <h4>정규화 데이터 (측정 ID: {selectedMeasurementId})</h4>
+            <h4>
+              {primaryMeasurementId
+                ? `IV 커브 / 기준행 상세 (측정 ID: ${primaryMeasurementId})`
+                : 'IV 커브 (기준행 미지정)'}
+            </h4>
             <div className="curve-section-actions">
-              {/* 이미지 저장 버튼: 차트가 있을 때만 활성화 */}
-              {isCurveExpanded && curveData && curveData.length > 0 && (
+              {/* 이미지 저장: 차트가 있을 때만 활성화 */}
+              {isCurveExpanded && idsWithCurveData.length > 0 && (
                 <button
                   className="download-button"
                   onClick={() => {
-                    // 선택된 측정의 measTime을 찾아서 파일명에 사용
-                    const measurement = data.find(
-                      (row) => row.measurementId === selectedMeasurementId
-                    );
-                    const timeStr = formatMeasTimeForFilename(measurement?.measTime);
+                    // 기준행이 있으면 기준행 ID와 measTime으로 파일명 생성, 없으면 채널명만 사용
+                    const measurement = primaryMeasurementId
+                      ? data.find((row) => row.measurementId === primaryMeasurementId)
+                      : null;
+                    const timeStr = measurement
+                      ? formatMeasTimeForFilename(measurement.measTime)
+                      : 'multi';
                     downloadChartAsPng(
                       chartRef.current,
-                      `${channel}_${timeStr}_${selectedMeasurementId}`
+                      `${channel}_${timeStr}`
                     );
                   }}
                 >
@@ -349,76 +424,100 @@ function ChannelTable({
             </div>
           </div>
 
-          {/* 펼친 상태일 때만 데이터 표시 */}
-          {isCurveExpanded && curveError && <p className="table-error">{curveError}</p>}
-          {isCurveExpanded && isCurveLoading && <p className="table-loading">커브 데이터 조회 중...</p>}
+          {/* 커브 조회 중 표시 */}
+          {isCurveExpanded && loadingCurveIds.length > 0 && (
+            <p className="table-loading">
+              커브 데이터 조회 중... ({loadingCurveIds.length}건)
+            </p>
+          )}
 
-          {isCurveExpanded && !isCurveLoading && !curveError && (
+          {isCurveExpanded && (
             <>
-              {curveData && curveData.length > 0 ? (
-                <>
-                  {/* 채널별 I-V 커브 그래프 (측정값 + STC) */}
-                  <div className="chart-wrapper" ref={chartRef}>
-                    <ResponsiveContainer width="100%" height={415}>
-                      <LineChart
-                        data={curveData}
-                        margin={{ top: 30, right: 30, left: 20, bottom: 30 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                        <XAxis
-                          dataKey="vMeasured"
-                          label={{
-                            value: '전압 (V)',
-                            position: 'insideBottom',
-                            offset: -18,
-                          }}
-                          type="number"
-                          domain={['auto', 'auto']}
-                          stroke="var(--text)"
-                        />
-                        <YAxis
-                          label={{
-                            value: '전류 (A)',
-                            angle: -90,
-                            position: 'insideLeft',
-                            offset: 10,
-                            style: { textAnchor: 'middle' },
-                          }}
-                          stroke="var(--text)"
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            background: 'var(--bg)',
-                            border: '1px solid var(--border)',
-                          }}
-                        />
-                        <Legend
-                          verticalAlign="bottom"
-                          wrapperStyle={{ bottom: 10 }}
-                        />
-                        {/* 측정값 곡선 (파란색) */}
-                        <Line
-                          type="monotone"
-                          dataKey="iMeasured"
-                          name="측정값"
-                          stroke="#3182ce"
-                          dot={false}
-                          strokeWidth={2}
-                        />
-                        {/* STC 정규화값 곡선 (붉은색) - case 0은 안 그려짐 */}
-                        <Line
-                          type="monotone"
-                          dataKey="iStc"
-                          name="STC 정규화"
-                          stroke="#e53e3e"
-                          dot={false}
-                          strokeWidth={2}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
+              {/* 다중 선택 행 IV 커브 차트 */}
+              {channelCurveChartData.length > 0 ? (
+                <div className="chart-wrapper" ref={chartRef}>
+                  <ResponsiveContainer width="100%" height={415}>
+                    <LineChart
+                      data={channelCurveChartData}
+                      margin={{ top: 30, right: 30, left: 20, bottom: 30 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <XAxis
+                        dataKey="vMeasured"
+                        label={{
+                          value: '전압 (V)',
+                          position: 'insideBottom',
+                          offset: -18,
+                        }}
+                        type="number"
+                        domain={['auto', 'auto']}
+                        stroke="var(--text)"
+                      />
+                      <YAxis
+                        label={{
+                          value: '전류 (A)',
+                          angle: -90,
+                          position: 'insideLeft',
+                          offset: 10,
+                          style: { textAnchor: 'middle' },
+                        }}
+                        stroke="var(--text)"
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          background: 'var(--bg)',
+                          border: '1px solid var(--border)',
+                        }}
+                      />
+                      <Legend
+                        verticalAlign="bottom"
+                        wrapperStyle={{ bottom: 10 }}
+                      />
+                      {/* 선택된 각 행의 측정값(solid) + STC(dashed) 라인 쌍 렌더링 */}
+                      {selectedIds.map((id) => {
+                        // 기준행은 굵고 불투명하게, 추가 행은 얇고 반투명하게 표시
+                        const isPrimary = id === primaryMeasurementId;
+                        const color = SELECTION_COLORS[id % SELECTION_COLORS.length];
+                        const strokeWidth = isPrimary ? 2.5 : 1.5;
+                        const strokeOpacity = isPrimary ? 1 : 0.6;
+                        return [
+                          <Line
+                            key={`iMeasured_${id}`}
+                            type="monotone"
+                            dataKey={`iMeasured_${id}`}
+                            name={`측정 (ID:${id})`}
+                            stroke={color}
+                            dot={false}
+                            strokeWidth={strokeWidth}
+                            strokeOpacity={strokeOpacity}
+                            connectNulls
+                          />,
+                          <Line
+                            key={`iStc_${id}`}
+                            type="monotone"
+                            dataKey={`iStc_${id}`}
+                            name={`STC (ID:${id})`}
+                            stroke={color}
+                            dot={false}
+                            strokeWidth={strokeWidth}
+                            strokeOpacity={strokeOpacity}
+                            strokeDasharray={isPrimary ? '' : '5 5'}
+                            connectNulls
+                          />,
+                        ];
+                      })}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                loadingCurveIds.length === 0 && (
+                  <p className="no-data">커브 데이터가 없습니다.</p>
+                )
+              )}
 
-                  {/* 정규화 데이터 테이블 */}
+              {/* 기준행 상세 데이터 테이블: 기준행이 지정된 경우에만 표시 */}
+              {primaryMeasurementId ? (
+                primaryCurveData && primaryCurveData.length > 0 ? (
                   <div className="table-wrapper curve-table-wrapper">
                     <table className="data-table">
                       <thead>
@@ -429,7 +528,7 @@ function ChannelTable({
                         </tr>
                       </thead>
                       <tbody>
-                        {curveData.map((row, index) => (
+                        {primaryCurveData.map((row, index) => (
                           <tr key={index}>
                             {CURVE_COLUMNS.map((col) => (
                               <td key={col.key}>{row[col.key] ?? '-'}</td>
@@ -439,9 +538,15 @@ function ChannelTable({
                       </tbody>
                     </table>
                   </div>
-                </>
+                ) : (
+                  loadingCurveIds.includes(primaryMeasurementId)
+                    ? null  // 로딩 중이면 위에서 이미 표시
+                    : <p className="no-data">기준행의 커브 데이터가 없습니다.</p>
+                )
               ) : (
-                <p className="no-data">커브 데이터가 없습니다.</p>
+                <p className="no-data-hint">
+                  라디오 버튼으로 기준행을 지정하면 상세 데이터가 표시됩니다.
+                </p>
               )}
             </>
           )}
@@ -452,7 +557,7 @@ function ChannelTable({
 }
 
 /**
- * 채널별 STC 곡선을 통합한 차트 데이터 생성
+ * 채널별 STC 곡선을 통합한 차트 데이터 생성 (종합 그래프용)
  *
  * 각 채널의 curveData를 하나의 배열로 합치되, 채널별로 다른 키를 사용한다.
  * 예: [{ vStc: 1.5, iStc_Ch1: 5.2 }, { vStc: 1.6, iStc_Ch2: 5.1 }, ...]
@@ -485,9 +590,10 @@ const buildCombinedChartData = (curveDataByChannel) => {
 /**
  * 메인 DataTable 컴포넌트 — 채널별 3개 테이블 + 통합 비교 차트 렌더링
  *
- * 필터 상태(selectedCase, filterDraft, appliedFilter)를 최상위에서 관리하여
- * 모든 채널에 동일한 필터가 적용된다.
- * 행 선택 시 해당 일시로 다른 채널 데이터를 자동 조회하여 종합 그래프에 표시한다.
+ * 선택 구조:
+ * - 행 클릭(다중): selectedIdsByChannel — 각 채널별로 여러 행 선택 가능, IV 커브 표시
+ * - 라디오(단일): primaryRow — 전역에서 하나만 지정, 종합 그래프 + 상세 테이블 결정
+ * 필터는 전체 채널 공통으로 적용된다.
  */
 function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
   // 통합 차트 DOM 요소 참조 (이미지 저장용)
@@ -499,51 +605,61 @@ function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
   const [appliedFilter, setAppliedFilter] = useState(EMPTY_FILTER);
 
   // ── 채널별 측정 데이터 (종합 그래프 일시 매핑용) ──
-  // ChannelTable이 데이터를 로드할 때 onMeasurementsLoaded 콜백으로 채운다
   const [measurementsByChannel, setMeasurementsByChannel] = useState({
     Ch1: [],
     Ch2: [],
     Ch3: [],
   });
 
-  // ── 채널별 선택 상태 (채널 IV 커브용 단일 선택) ──
-  const [selectionByChannel, setSelectionByChannel] = useState({
-    Ch1: null,
-    Ch2: null,
-    Ch3: null,
-  });
-
-  // ── 채널별 커브 데이터 (채널 IV 커브에 표시) ──
-  const [curveDataByChannel, setCurveDataByChannel] = useState({
+  // ── 채널별 다중 선택 상태 (IV 커브 표시용) ──
+  const [selectedIdsByChannel, setSelectedIdsByChannel] = useState({
     Ch1: [],
     Ch2: [],
     Ch3: [],
   });
 
-  // 채널별 로딩/에러 상태
-  const [loadingByChannel, setLoadingByChannel] = useState({});
-  const [errorByChannel, setErrorByChannel] = useState({});
+  // ── 채널별 커브 데이터 맵 { measurementId: data[] } ──
+  const [curvesByChannel, setCurvesByChannel] = useState({
+    Ch1: {},
+    Ch2: {},
+    Ch3: {},
+  });
 
-  // 채널별 펼침/닫힘 상태 (선택과 별개로 관리)
+  // ── 채널별 커브 로딩 중인 ID 목록 ──
+  const [loadingCurveIdsByChannel, setLoadingCurveIdsByChannel] = useState({
+    Ch1: [],
+    Ch2: [],
+    Ch3: [],
+  });
+
+  // ── 전역 기준행: 종합 그래프 + 상세 테이블 결정 ──
+  // 형태: { channel: 'Ch1', measurementId: 5 } | null
+  const [primaryRow, setPrimaryRow] = useState(null);
+
+  // ── 채널별 펼침/닫힘 상태 ──
   const [expandedByChannel, setExpandedByChannel] = useState({
     Ch1: true,
     Ch2: true,
     Ch3: true,
   });
 
-  // ── 종합 그래프 전용 커브 데이터 (일시 매핑 결과) ──
-  // 행 클릭 시 해당 measTime으로 모든 채널을 자동 조회한 결과를 저장한다
+  // ── 종합 그래프 전용 커브 데이터 (기준행 일시 매핑 결과) ──
   const [combinedChartCurvesByChannel, setCombinedChartCurvesByChannel] = useState({
     Ch1: [],
     Ch2: [],
     Ch3: [],
   });
 
-  // 종합 그래프를 마지막으로 트리거한 행 정보 (해제 시 종합 그래프 초기화 판단용)
-  const [combinedChartDriver, setCombinedChartDriver] = useState(null);
-  // 형태: { channel: 'Ch1', measurementId: 5 } | null
+  // 모든 선택 상태 초기화 (필터 변경 / case 변경 시 사용)
+  const clearAllSelections = () => {
+    setSelectedIdsByChannel({ Ch1: [], Ch2: [], Ch3: [] });
+    setCurvesByChannel({ Ch1: {}, Ch2: {}, Ch3: {} });
+    setLoadingCurveIdsByChannel({ Ch1: [], Ch2: [], Ch3: [] });
+    setPrimaryRow(null);
+    setCombinedChartCurvesByChannel({ Ch1: [], Ch2: [], Ch3: [] });
+  };
 
-  // ChannelTable이 데이터를 로드했을 때 measurementsByChannel 업데이트
+  // ChannelTable 데이터 로드 완료 시 measurementsByChannel 업데이트
   const handleMeasurementsLoaded = (channel, data) => {
     setMeasurementsByChannel((prev) => ({ ...prev, [channel]: data }));
   };
@@ -553,110 +669,185 @@ function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
     setFilterDraft((prev) => ({ ...prev, [key]: value }));
   };
 
-  // 적용 버튼: draft를 적용 상태로 복사 + 모든 채널 선택/커브 해제
+  // 적용 버튼: 모든 채널 선택/커브 해제 후 필터 적용
   const handleApplyFilter = () => {
     setAppliedFilter(filterDraft);
-    setSelectionByChannel({ Ch1: null, Ch2: null, Ch3: null });
-    setCurveDataByChannel({ Ch1: [], Ch2: [], Ch3: [] });
-    setCombinedChartCurvesByChannel({ Ch1: [], Ch2: [], Ch3: [] });
-    setCombinedChartDriver(null);
+    clearAllSelections();
   };
 
-  // 초기화 버튼: draft/applied 모두 초기화 + 모든 채널 선택/커브 해제
+  // 초기화 버튼: 필터 + 선택 전체 초기화
   const handleResetFilter = () => {
     setFilterDraft(EMPTY_FILTER);
     setAppliedFilter(EMPTY_FILTER);
-    setSelectionByChannel({ Ch1: null, Ch2: null, Ch3: null });
-    setCurveDataByChannel({ Ch1: [], Ch2: [], Ch3: [] });
-    setCombinedChartCurvesByChannel({ Ch1: [], Ch2: [], Ch3: [] });
-    setCombinedChartDriver(null);
+    clearAllSelections();
   };
 
-  // Case 변경: 모든 채널 재조회 + 선택/커브 전체 초기화
+  // Case 변경: 모든 채널 재조회 + 선택 전체 초기화
   const handleCaseChange = (value) => {
     setSelectedCase(value === '' ? null : Number(value));
-    setSelectionByChannel({ Ch1: null, Ch2: null, Ch3: null });
-    setCurveDataByChannel({ Ch1: [], Ch2: [], Ch3: [] });
-    setCombinedChartCurvesByChannel({ Ch1: [], Ch2: [], Ch3: [] });
-    setCombinedChartDriver(null);
+    clearAllSelections();
   };
 
   /**
-   * 측정 행 선택 핸들러
+   * 행 클릭 핸들러 — 해당 행을 IV 커브 표시 목록에 토글 추가/제거
    *
-   * 1. 해당 채널의 커브 데이터를 조회하여 채널 IV 커브에 표시
-   * 2. 선택된 행의 measTime으로 다른 채널을 자동 조회하여 종합 그래프에 표시
+   * 기준행(primaryRow)은 건드리지 않는다.
+   * 단, 기준행으로 지정된 행을 클릭으로 제거하면 기준행도 함께 해제된다.
    */
-  const handleSelect = async (channel, measurementId) => {
-    // 같은 행 다시 클릭 시 토글로 해제
-    if (selectionByChannel[channel] === measurementId) {
-      setSelectionByChannel((prev) => ({ ...prev, [channel]: null }));
-      setCurveDataByChannel((prev) => ({ ...prev, [channel]: [] }));
-      // 이 행이 종합 그래프를 트리거한 행이었다면 종합 그래프도 초기화
-      if (
-        combinedChartDriver?.channel === channel &&
-        combinedChartDriver?.measurementId === measurementId
-      ) {
-        setCombinedChartDriver(null);
+  const handleRowClick = async (channel, measurementId) => {
+    const currentIds = selectedIdsByChannel[channel];
+    const isAlreadySelected = currentIds.includes(measurementId);
+
+    if (isAlreadySelected) {
+      // 선택 해제: selectedIds에서 제거 + 커브 데이터 삭제
+      setSelectedIdsByChannel((prev) => ({
+        ...prev,
+        [channel]: prev[channel].filter((id) => id !== measurementId),
+      }));
+      setCurvesByChannel((prev) => {
+        const updated = { ...prev[channel] };
+        delete updated[measurementId];
+        return { ...prev, [channel]: updated };
+      });
+      // 해제된 행이 기준행이었다면 기준행 + 종합 그래프도 초기화
+      if (primaryRow?.channel === channel && primaryRow?.measurementId === measurementId) {
+        setPrimaryRow(null);
         setCombinedChartCurvesByChannel({ Ch1: [], Ch2: [], Ch3: [] });
       }
       return;
     }
 
-    // 선택 상태 업데이트 + 새로 선택 시 자동으로 펼침
-    setSelectionByChannel((prev) => ({ ...prev, [channel]: measurementId }));
+    // 신규 선택: selectedIds에 추가 + 커브 데이터 조회
+    setSelectedIdsByChannel((prev) => ({
+      ...prev,
+      [channel]: [...prev[channel], measurementId],
+    }));
     setExpandedByChannel((prev) => ({ ...prev, [channel]: true }));
-    setLoadingByChannel((prev) => ({ ...prev, [channel]: true }));
-    setErrorByChannel((prev) => ({ ...prev, [channel]: '' }));
+
+    // 커브 로딩 시작
+    setLoadingCurveIdsByChannel((prev) => ({
+      ...prev,
+      [channel]: [...prev[channel], measurementId],
+    }));
 
     try {
-      // 선택된 채널의 커브 데이터 조회
       const result = await fetchCurveData(measurementId);
-      setCurveDataByChannel((prev) => ({ ...prev, [channel]: result }));
-
-      // 종합 그래프 일시 매핑:
-      // 선택된 측정의 measTime으로 다른 채널에서 동일 일시 데이터를 자동 조회한다
-      const selectedMeasurement = measurementsByChannel[channel]
-        .find((m) => m.measurementId === measurementId);
-
-      if (selectedMeasurement) {
-        const { measTime } = selectedMeasurement;
-        setCombinedChartDriver({ channel, measurementId });
-
-        // 모든 채널(선택 채널 포함) 일시 매핑 결과 초기화
-        const newCombinedCurves = { Ch1: [], Ch2: [], Ch3: [] };
-        newCombinedCurves[channel] = result; // 선택 채널은 이미 조회된 결과 재사용
-
-        // 나머지 채널: 같은 measTime의 측정을 찾아 커브 병렬 조회
-        const otherChannels = CHANNELS.filter((ch) => ch !== channel);
-        await Promise.all(
-          otherChannels.map(async (otherCh) => {
-            const matched = measurementsByChannel[otherCh]
-              .find((m) => m.measTime === measTime);
-            if (matched) {
-              try {
-                newCombinedCurves[otherCh] = await fetchCurveData(matched.measurementId);
-              } catch {
-                // 매핑 실패 시 해당 채널은 종합 그래프에서 미표시
-              }
-            }
-          })
-        );
-
-        setCombinedChartCurvesByChannel(newCombinedCurves);
-      }
-    } catch (err) {
-      setErrorByChannel((prev) => ({ ...prev, [channel]: err.message }));
-      setCurveDataByChannel((prev) => ({ ...prev, [channel]: [] }));
+      setCurvesByChannel((prev) => ({
+        ...prev,
+        [channel]: { ...prev[channel], [measurementId]: result },
+      }));
+    } catch {
+      // 로드 실패 시 selectedIds에서 롤백
+      setSelectedIdsByChannel((prev) => ({
+        ...prev,
+        [channel]: prev[channel].filter((id) => id !== measurementId),
+      }));
     } finally {
-      setLoadingByChannel((prev) => ({ ...prev, [channel]: false }));
+      setLoadingCurveIdsByChannel((prev) => ({
+        ...prev,
+        [channel]: prev[channel].filter((id) => id !== measurementId),
+      }));
+    }
+  };
+
+  /**
+   * 라디오 클릭 핸들러 — 기준행 지정/해제
+   *
+   * 1. 기준행으로 지정: selectedIds에도 자동 추가 + 종합 그래프 일시 매핑
+   * 2. 이미 기준행이면 해제 (토글): 종합 그래프 초기화
+   */
+  const handlePrimaryChange = async (channel, measurementId) => {
+    const isAlreadyPrimary =
+      primaryRow?.channel === channel && primaryRow?.measurementId === measurementId;
+
+    if (isAlreadyPrimary) {
+      // 기준행 해제 (토글)
+      setPrimaryRow(null);
+      setCombinedChartCurvesByChannel({ Ch1: [], Ch2: [], Ch3: [] });
+      return;
+    }
+
+    // 새 기준행 지정
+    setPrimaryRow({ channel, measurementId });
+    setExpandedByChannel((prev) => ({ ...prev, [channel]: true }));
+
+    // 기준행은 selectedIds에도 포함되어야 IV 커브에 표시됨
+    const alreadySelected = selectedIdsByChannel[channel].includes(measurementId);
+    if (!alreadySelected) {
+      setSelectedIdsByChannel((prev) => ({
+        ...prev,
+        [channel]: [...prev[channel], measurementId],
+      }));
+    }
+
+    // 커브 데이터가 없으면 조회
+    let primaryCurveData = curvesByChannel[channel][measurementId];
+
+    if (!primaryCurveData) {
+      setLoadingCurveIdsByChannel((prev) => ({
+        ...prev,
+        [channel]: [...prev[channel], measurementId],
+      }));
+      try {
+        primaryCurveData = await fetchCurveData(measurementId);
+        setCurvesByChannel((prev) => ({
+          ...prev,
+          [channel]: { ...prev[channel], [measurementId]: primaryCurveData },
+        }));
+      } catch {
+        // 커브 조회 실패 시 기준행 유지하되 종합 그래프는 건너뜀
+        setLoadingCurveIdsByChannel((prev) => ({
+          ...prev,
+          [channel]: prev[channel].filter((id) => id !== measurementId),
+        }));
+        return;
+      } finally {
+        setLoadingCurveIdsByChannel((prev) => ({
+          ...prev,
+          [channel]: prev[channel].filter((id) => id !== measurementId),
+        }));
+      }
+    }
+
+    // 종합 그래프 일시 매핑: 기준행의 measTime으로 다른 채널 자동 조회
+    const selectedMeasurement = measurementsByChannel[channel]
+      .find((m) => m.measurementId === measurementId);
+
+    if (selectedMeasurement) {
+      const { measTime } = selectedMeasurement;
+      const newCombinedCurves = { Ch1: [], Ch2: [], Ch3: [] };
+      newCombinedCurves[channel] = primaryCurveData;
+
+      // 나머지 채널: 같은 measTime 데이터 병렬 조회
+      const otherChannels = CHANNELS.filter((ch) => ch !== channel);
+      await Promise.all(
+        otherChannels.map(async (otherCh) => {
+          const matched = measurementsByChannel[otherCh]
+            .find((m) => m.measTime === measTime);
+          if (matched) {
+            try {
+              newCombinedCurves[otherCh] = await fetchCurveData(matched.measurementId);
+            } catch {
+              // 매핑 실패 시 해당 채널은 종합 그래프에서 미표시
+            }
+          }
+        })
+      );
+
+      setCombinedChartCurvesByChannel(newCombinedCurves);
     }
   };
 
   // 채널 데이터 재조회 시 해당 채널 선택 해제 (ChannelTable useEffect에서 호출)
   const handleClearSelection = (channel) => {
-    setSelectionByChannel((prev) => ({ ...prev, [channel]: null }));
-    setCurveDataByChannel((prev) => ({ ...prev, [channel]: [] }));
+    setSelectedIdsByChannel((prev) => ({ ...prev, [channel]: [] }));
+    setCurvesByChannel((prev) => ({ ...prev, [channel]: {} }));
+    setLoadingCurveIdsByChannel((prev) => ({ ...prev, [channel]: [] }));
+    // 이 채널이 기준행이었다면 기준행 + 종합 그래프 초기화
+    if (primaryRow?.channel === channel) {
+      setPrimaryRow(null);
+      setCombinedChartCurvesByChannel({ Ch1: [], Ch2: [], Ch3: [] });
+    }
   };
 
   // 채널별 펼침/닫힘 토글
@@ -664,7 +855,7 @@ function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
     setExpandedByChannel((prev) => ({ ...prev, [channel]: !prev[channel] }));
   };
 
-  // 종합 차트 데이터 (일시 매핑 결과 기반)
+  // 종합 차트 데이터 (기준행의 일시 매핑 결과 기반)
   const combinedChartData = buildCombinedChartData(combinedChartCurvesByChannel);
 
   // 종합 차트에 표시할 채널 (STC 데이터가 있는 채널만)
@@ -685,7 +876,6 @@ function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
           >
             {isUploadOpen ? '파일 업로드 닫기 ▲' : '파일 업로드 ▼'}
           </button>
-          {/* 파일 업로드 영역 (토글 시에만 표시, 버튼 바로 아래) */}
           {uploadPanel}
         </div>
       </div>
@@ -795,19 +985,22 @@ function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
           refreshKey={refreshKey}
           selectedCase={selectedCase}
           appliedFilter={appliedFilter}
-          selectedMeasurementId={selectionByChannel[channel]}
-          curveData={curveDataByChannel[channel]}
-          isCurveLoading={loadingByChannel[channel]}
-          curveError={errorByChannel[channel]}
+          selectedIds={selectedIdsByChannel[channel]}
+          primaryMeasurementId={
+            primaryRow?.channel === channel ? primaryRow.measurementId : null
+          }
+          curvesBySelectedId={curvesByChannel[channel]}
+          loadingCurveIds={loadingCurveIdsByChannel[channel]}
           isCurveExpanded={expandedByChannel[channel]}
-          onSelect={handleSelect}
+          onRowClick={handleRowClick}
+          onPrimaryChange={handlePrimaryChange}
           onClearSelection={handleClearSelection}
           onToggleExpand={handleToggleExpand}
           onMeasurementsLoaded={handleMeasurementsLoaded}
         />
       ))}
 
-      {/* 통합 STC 비교 차트: 기준행 선택 시 일시 매핑된 채널 커브를 표시 */}
+      {/* 통합 STC 비교 차트: 기준행 지정 시 일시 매핑된 채널별 STC 커브 표시 */}
       <div className="combined-chart-section">
         <div className="combined-chart-header">
           <h3>채널별 STC 정규화 IV 커브 비교</h3>
@@ -824,7 +1017,9 @@ function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
           )}
         </div>
         {channelsWithStcData.length === 0 && (
-          <p className="no-data">측정 데이터를 선택하면 해당 일시의 채널별 STC 정규화 곡선이 표시됩니다.</p>
+          <p className="no-data">
+            기준행을 지정하면 해당 일시의 채널별 STC 정규화 곡선이 표시됩니다.
+          </p>
         )}
         <div className="chart-wrapper" ref={combinedChartRef}>
           <ResponsiveContainer width="100%" height={415}>
@@ -874,7 +1069,7 @@ function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
                   stroke={CHANNEL_COLORS[channel]}
                   dot={false}
                   strokeWidth={2}
-                  connectNulls // null 값 건너뛰고 같은 채널의 점들을 잇기
+                  connectNulls
                 />
               ))}
             </LineChart>

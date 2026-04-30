@@ -294,14 +294,48 @@
   cursor: pointer;
 }
 
-/* 선택된 행 강조 */
+/* 선택된 행 강조 (IV 커브에 추가된 행: 옅은 보조색) */
 .selected-row {
-  background: var(--accent-bg);
+  background: rgba(170, 59, 255, 0.07);
   font-weight: 600;
 }
 
 .selected-row:hover {
-  background: var(--accent-bg);
+  background: rgba(170, 59, 255, 0.12);
+}
+
+/* 기준행 강조 (라디오로 지정된 행: 진한 강조색) */
+.selected-row-primary {
+  background: rgba(170, 59, 255, 0.20);
+  font-weight: 700;
+  border-left: 3px solid var(--accent);
+}
+
+.selected-row-primary:hover {
+  background: rgba(170, 59, 255, 0.26);
+}
+
+/* 기준행 지정 라디오 버튼 컬럼 */
+.radio-col {
+  width: 36px;
+  text-align: center;
+  padding: 6px 4px;
+}
+
+/* 라디오 버튼 스타일 */
+.primary-radio {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+/* 기준행 미지정 안내 문구 (힌트 스타일) */
+.no-data-hint {
+  color: var(--text);
+  font-size: 13px;
+  font-style: italic;
+  padding: 8px 0;
 }
 
 /* 정규화 데이터 영역 */
