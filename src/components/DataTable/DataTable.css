@@ -383,6 +383,13 @@
   color: var(--accent);
 }
 
+/* 측정값 커브 표시 중일 때 토글 버튼 활성 상태 */
+.toggle-button-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(170, 59, 255, 0.08);
+}
+
 /* 이미지 저장 버튼: 에메랄드 그린 (저장/다운로드 행위 연상) */
 .download-button {
   padding: 4px 12px;

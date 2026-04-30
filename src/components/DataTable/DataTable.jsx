@@ -264,6 +264,8 @@ function ChannelTable({
   const [data, setData] = useState([]);                       // 측정 정보 목록 (원본)
   const [isLoading, setIsLoading] = useState(false);          // 측정 목록 로딩 상태
   const [error, setError] = useState('');                     // 측정 목록 에러
+  // raw 측정값 커브 표시 여부 (기본 숨김, 토글로 켤 수 있음)
+  const [showRawCurve, setShowRawCurve] = useState(false);
 
   // 차트 DOM 요소 참조 (이미지 저장 시 SVG 추출용)
   const chartRef = useRef(null);
@@ -415,6 +417,13 @@ function ChannelTable({
                   이미지 저장
                 </button>
               )}
+              {/* raw 측정값 커브 토글: 기본 숨김, 필요 시 켤 수 있음 */}
+              <button
+                className={`toggle-button ${showRawCurve ? 'toggle-button-active' : ''}`}
+                onClick={() => setShowRawCurve((prev) => !prev)}
+              >
+                {showRawCurve ? '측정값 숨기기' : '측정값 표시'}
+              </button>
               <button
                 className="toggle-button"
                 onClick={() => onToggleExpand(channel)}
@@ -481,17 +490,21 @@ function ChannelTable({
                         const strokeWidth = isPrimary ? 2.5 : 1.5;
                         const strokeOpacity = isPrimary ? 1 : 0.6;
                         return [
-                          <Line
-                            key={`iMeasured_${id}`}
-                            type="monotone"
-                            dataKey={`iMeasured_${id}`}
-                            name={`측정 (ID:${id})`}
-                            stroke={color}
-                            dot={false}
-                            strokeWidth={strokeWidth}
-                            strokeOpacity={strokeOpacity}
-                            connectNulls
-                          />,
+                          // 측정값(raw) 커브: 토글 ON일 때만 표시
+                          showRawCurve && (
+                            <Line
+                              key={`iMeasured_${id}`}
+                              type="monotone"
+                              dataKey={`iMeasured_${id}`}
+                              name={`측정 (ID:${id})`}
+                              stroke={color}
+                              dot={false}
+                              strokeWidth={strokeWidth}
+                              strokeOpacity={strokeOpacity}
+                              connectNulls
+                            />
+                          ),
+                          // STC 정규화 커브: 항상 표시
                           <Line
                             key={`iStc_${id}`}
                             type="monotone"
