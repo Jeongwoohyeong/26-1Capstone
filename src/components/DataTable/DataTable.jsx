@@ -346,7 +346,7 @@ function ChannelTable({
                 <thead>
                   <tr>
                     {/* 기준행 지정 라디오 버튼 컬럼 */}
-                    <th className="radio-col" title="기준행 지정">기준</th>
+                    <th className="radio-col" title="기준행 지정">상세</th>
                     {TABLE_COLUMNS.map((col) => (
                       <th key={col.key}>{col.label}</th>
                     ))}
