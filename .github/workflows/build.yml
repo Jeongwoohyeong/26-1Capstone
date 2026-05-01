@@ -77,6 +77,15 @@ jobs:
       - name: Install packaging tools (pinned, --no-save)
         run: npm install --no-save electron@41.2.1 electron-builder@26.8.1
 
+      # 태그 버전(v1.0.1 → 1.0.1)을 package.json에 반영해 출력 파일명과 일치시킨다.
+      # --no-git-tag-version: git 커밋/태그 생성 없이 package.json 버전만 수정
+      - name: Sync package.json version with git tag
+        shell: bash
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          npm version "$VERSION" --no-git-tag-version
+
       - name: Build Electron zip package
         run: npm run electron:build
 

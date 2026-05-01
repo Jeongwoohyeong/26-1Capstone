@@ -51,6 +51,28 @@
   color: var(--accent);
 }
 
+/* 공통 필터 패널: 모든 채널 위에 배치 */
+.shared-filter-section {
+  margin-bottom: 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+/* 공통 필터 헤더: 제목 + case 드롭다운을 양쪽 끝에 배치 */
+.shared-filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.shared-filter-header h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
 /* 채널별 테이블 영역 */
 .channel-table {
   margin-bottom: 32px;
@@ -272,14 +294,71 @@
   cursor: pointer;
 }
 
-/* 선택된 행 강조 */
+/* 선택된 행 강조 (IV 커브에 추가된 행: 옅은 보조색) */
 .selected-row {
-  background: var(--accent-bg);
+  background: rgba(170, 59, 255, 0.07);
   font-weight: 600;
 }
 
 .selected-row:hover {
-  background: var(--accent-bg);
+  background: rgba(170, 59, 255, 0.12);
+}
+
+/* 기준행 강조 (라디오로 지정된 행: 진한 강조색) */
+.selected-row-primary {
+  background: rgba(170, 59, 255, 0.20);
+  font-weight: 700;
+  border-left: 3px solid var(--accent);
+}
+
+.selected-row-primary:hover {
+  background: rgba(170, 59, 255, 0.26);
+}
+
+/* 기준행 지정 라디오 버튼 컬럼 */
+.radio-col {
+  width: 36px;
+  text-align: center;
+  padding: 6px 4px;
+}
+
+/* 라디오 버튼 스타일 */
+.primary-radio {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+/* CSV 내보내기 버튼 영역: 상세 테이블 상단 */
+.curve-export-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+/* CSV 내보내기 버튼 */
+.csv-export-button {
+  padding: 4px 14px;
+  font-size: 13px;
+  border: 1px solid #2b6cb0;
+  border-radius: 4px;
+  background: #3182ce;
+  color: white;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.csv-export-button:hover {
+  background: #2b6cb0;
+}
+
+/* 기준행 미지정 안내 문구 (힌트 스타일) */
+.no-data-hint {
+  color: var(--text);
+  font-size: 13px;
+  font-style: italic;
+  padding: 8px 0;
 }
 
 /* 정규화 데이터 영역 */
@@ -325,6 +404,13 @@
 .toggle-button:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* 측정값 커브 표시 중일 때 토글 버튼 활성 상태 */
+.toggle-button-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(170, 59, 255, 0.08);
 }
 
 /* 이미지 저장 버튼: 에메랄드 그린 (저장/다운로드 행위 연상) */
