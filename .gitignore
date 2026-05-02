@@ -30,6 +30,18 @@ CLAUDE.md
 # Python
 __pycache__/
 *.db
+# Python 가상환경 (프로젝트 로컬 설치, 수백 MB이므로 커밋 금지)
+BackEnd/venv/
+# PyInstaller 빌드 산출물
+BackEnd/build/
+BackEnd/dist/
+BackEnd/*.spec
+# MainServer.spec 은 패키징 빌드 설정 파일이므로 예외로 추적 (CI 재현성 확보)
+!BackEnd/MainServer.spec
+# 로컬 venv 실행 스크립트 (개인 환경 전용, 공유하지 않음)
+StartBackEnd.bat
+# Electron 패키징 산출물
+release/
 
 # Raw data
 Data/

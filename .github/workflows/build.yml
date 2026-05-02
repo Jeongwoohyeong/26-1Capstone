@@ -1,0 +1,105 @@
+# Solar Analysis Tool — Windows 패키징 자동화
+#
+# 트리거: v*.*.* 형식 태그 푸시 (예: v1.0.0, v1.0.1)
+# 동작:
+#   1. 태그가 main 브랜치 히스토리에 포함되는지 검증 (아니면 중단)
+#   2. Python + Node 환경 셋업
+#   3. MainServer.exe (PyInstaller) 빌드
+#   4. Electron zip 패키지 빌드 (electron-builder zip 타겟)
+#   5. zip을 Workflow Artifact 로 업로드
+#   6. 동일 zip을 GitHub Release 에 자동 첨부
+
+name: Build Windows Package
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write   # GitHub Release 생성 권한
+
+# GitHub Actions 가 액션을 실행할 때 쓰는 내부 Node 런타임을 24 로 지정.
+# 2026-06-02 부터 Node 20 지원이 중단되어 기본적으로 Node 24 로 강제 전환되므로
+# 미리 opt-in 해서 경고를 제거하고 호환성 문제를 선제적으로 노출시킨다.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      # 태그 커밋이 main에 포함되는지 확인하려면 전체 히스토리 필요 (기본은 shallow clone)
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 태그가 main 브랜치에 머지된 커밋을 가리키는지 검증.
+      # feature 브랜치에서 실수로 태그를 푸시해도 릴리스가 나가지 않도록 방어.
+      - name: Verify tag is on main branch
+        shell: bash
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "${{ github.sha }}" origin/main; then
+            echo "::error::태그 ${{ github.ref_name }} 이 main 브랜치에 포함되지 않음. 릴리스 중단."
+            exit 1
+          fi
+          echo "OK: 태그 커밋이 main 히스토리에 포함됨"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+          cache-dependency-path: BackEnd/requirements.txt
+
+      - name: Install Python dependencies
+        working-directory: BackEnd
+        run: pip install -r requirements.txt
+
+      - name: Build MainServer.exe via PyInstaller
+        working-directory: BackEnd
+        run: pyinstaller MainServer.spec
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # 패키징 전용 도구는 package.json 에 기록하지 않고 CI/로컬 양쪽에서 동일 버전으로 설치.
+      # 팀원이 npm install 시 electron 등 수백 MB 를 받지 않도록 --no-save 유지.
+      - name: Install packaging tools (pinned, --no-save)
+        run: npm install --no-save electron@41.2.1 electron-builder@26.8.1
+
+      # 태그 버전(v1.0.1 → 1.0.1)을 package.json에 반영해 출력 파일명과 일치시킨다.
+      # --no-git-tag-version: git 커밋/태그 생성 없이 package.json 버전만 수정
+      - name: Sync package.json version with git tag
+        shell: bash
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          npm version "$VERSION" --no-git-tag-version
+
+      - name: Build Electron zip package
+        run: npm run electron:build
+
+      # 태그 트리거 실패/성공과 무관하게 zip 은 Actions 페이지에서 다운로드 가능하게 보관.
+      - name: Upload zip as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: solar-analysis-tool-windows
+          path: release/*.zip
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.zip
+          draft: false
+          generate_release_notes: true

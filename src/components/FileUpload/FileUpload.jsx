@@ -14,6 +14,8 @@ function FileUpload({ onUploadSuccess }) {
   const [isSending, setIsSending] = useState(false);            // 서버 전송 중 여부
   const [warning, setWarning] = useState('');                   // 경고 메시지 (''이면 숨김)
   const [successMessage, setSuccessMessage] = useState('');     // 성공 메시지
+  // 배치 전송 진행률 — 대량 업로드 시 사용자에게 체감 진행 표시
+  const [progress, setProgress] = useState({ processed: 0, total: 0 });
   const fileInputRef = useRef(null); // 숨겨진 <input type="file">을 가리키는 참조
 
   // 파일 선택 시 호출되는 핸들러
@@ -82,10 +84,14 @@ function FileUpload({ onUploadSuccess }) {
     setIsSending(true);
     setWarning('');
     setSuccessMessage('');
+    setProgress({ processed: 0, total: uploadedFiles.length });
 
     try {
-      // API 호출: 파일들을 채널별로 그룹화하여 서버에 전송
-      const results = await uploadFiles(uploadedFiles);
+      // API 호출: 파일들을 채널별로 그룹화하여 배치 단위로 서버에 전송
+      // 두번째 인자는 배치 완료 시마다 호출되는 진행률 콜백
+      const results = await uploadFiles(uploadedFiles, (processed, total) => {
+        setProgress({ processed, total });
+      });
 
       // 결과 분석: 성공/실패 건수
       const successCount = results.filter((r) => !r.error).length;
@@ -109,6 +115,7 @@ function FileUpload({ onUploadSuccess }) {
       setWarning(`서버 전송 실패: ${error.message}`);
     } finally {
       setIsSending(false);
+      setProgress({ processed: 0, total: 0 });
     }
   };
 
@@ -202,7 +209,10 @@ function FileUpload({ onUploadSuccess }) {
                 onClick={handleSendToServer}
                 disabled={isSending}
               >
-                {isSending ? '전송 중...' : 'DB에 저장'}
+                {/* 전송 중일 때는 배치 진행률(예: "전송 중... 250 / 7000")을 표시 */}
+                {isSending
+                  ? `전송 중... ${progress.processed} / ${progress.total}`
+                  : 'DB에 저장'}
               </button>
               <button className="clear-button" onClick={handleClearAll}>
                 전체 삭제

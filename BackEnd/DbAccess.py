@@ -6,8 +6,8 @@ CSV 파싱 → Rs 계산 → STC 보정 → DB 저장, DB에서 I-V 커브 데�
 import sqlite3
 import pandas as pd
 from typing import List, Dict, Optional
-from BackEnd.Parser import parseRawDataFile
-from BackEnd.Calculator import calculateRs, convertToStc
+from Parser import parseRawDataFile
+from Calculator import calculateRs, convertToStc
 
 # 동일 (measTime, channel) 조합의 기존 측정 정보 조회
 def findExistingMeasurement(
