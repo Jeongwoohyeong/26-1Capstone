@@ -7,7 +7,7 @@ import sqlite3
 import pandas as pd
 from typing import List, Dict, Optional
 from Parser import parseRawDataFile
-from Calculator import calculateRs, convertToStc
+from Calculator import calculateRs, convertToStc, findMaxPowerPoint
 
 # 동일 (measTime, channel) 조합의 기존 측정 정보 조회
 def findExistingMeasurement(
@@ -94,7 +94,21 @@ def saveData(
         data["irradiance"],
     )
 
-    # ── 4. 측정 정보 테이블에 저장 ─────────────────────────────────
+    # ── 4. STC 보정 + 최대 전력 지점 계산 (case 0이면 보정 안 함) ───
+    stcResults = []
+    maxPowerPoint = {"vmaxStc": None, "imaxStc": None, "pmaxStc": None}
+    if rsResult["case"] > 0:
+        dfCurve = pd.DataFrame({
+            "G1":   data["irradiance"],
+            "T1":   data["centerTemp"],
+            "I1":   data["current"],
+            "V1":   data["voltage"],
+            "Isc1": data["isc"],
+        })
+        stcResults = convertToStc(dfCurve, rs=rsResult["rs"])
+        maxPowerPoint = findMaxPowerPoint(stcResults)
+
+    # ── 5. 측정 정보 테이블에 저장 ─────────────────────────────────
     # 2번 중복 검사와 INSERT 사이에 다른 요청이 같은 행을 먼저 넣는
     # 경쟁조건(race condition)이 있을 수 있어 UNIQUE 제약 위반을 안전망으로 처리.
     try:
@@ -103,8 +117,8 @@ def saveData(
             INSERT INTO measurementInfo (
                 measTime, channel, irradiance, isc, voc, vmax, imax, pmax,
                 fillFactor, centerTemp, temp1, temp2, temp3, temp4, temp5,
-                ambientTemp, caseLevel
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ambientTemp, caseLevel, vmaxStc, imaxStc, pmaxStc
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data["measTime"],
@@ -124,6 +138,9 @@ def saveData(
                 data["temp5"],
                 data["ambientTemp"],
                 rsResult["case"],
+                maxPowerPoint["vmaxStc"],
+                maxPowerPoint["imaxStc"],
+                maxPowerPoint["pmaxStc"],
             ),
         )
     except sqlite3.IntegrityError:
@@ -140,18 +157,6 @@ def saveData(
             "caseLevel":     existing["caseLevel"],
         }
     measurementId = cursor.lastrowid
-
-    # ── 5. STC 보정 (case 0이면 보정 안 함) ────────────────────────
-    stcResults = []
-    if rsResult["case"] > 0:
-        dfCurve = pd.DataFrame({
-            "G1":   data["irradiance"],
-            "T1":   data["centerTemp"],
-            "I1":   data["current"],
-            "V1":   data["voltage"],
-            "Isc1": data["isc"],
-        })
-        stcResults = convertToStc(dfCurve, rs=rsResult["rs"])
 
     # ── 6. I-V 커브 테이블에 저장 ──────────────────────────────────
     for index in range(len(data["voltage"])):
