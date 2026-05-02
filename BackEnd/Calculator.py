@@ -215,6 +215,36 @@ def convertToStc(
     return result
 
 
+# STC 보정된 (vStc, iStc) 포인트들에서 최대 전력 지점을 찾는다.
+def findMaxPowerPoint(stcResults: List[Dict]) -> Dict:
+    """
+    STC 보정된 I-V 커브에서 최대 전력 지점(MPP)의 전압/전류/전력을 반환한다.
+
+    Parameters
+    ----------
+    stcResults : convertToStc()의 반환 리스트
+                 [{"vMeasured", "iMeasured", "vStc", "iStc"}, ...]
+
+    Returns
+    -------
+    dict : {"vmaxStc": float, "imaxStc": float, "pmaxStc": float}
+           stcResults가 비어있으면 모두 None
+    """
+    if not stcResults:
+        return {"vmaxStc": None, "imaxStc": None, "pmaxStc": None}
+
+    maxRow = max(stcResults, key=lambda row: row["vStc"] * row["iStc"])
+    vmaxStc = maxRow["vStc"]
+    imaxStc = maxRow["iStc"]
+    pmaxStc = vmaxStc * imaxStc
+
+    return {
+        "vmaxStc": round(vmaxStc, 6),
+        "imaxStc": round(imaxStc, 6),
+        "pmaxStc": round(pmaxStc, 6),
+    }
+
+
 # ════════════════════════════════════════════════════════════════════
 # 더미 데이터 실행 예시
 # ════════════════════════════════════════════════════════════════════
