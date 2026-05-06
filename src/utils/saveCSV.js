@@ -35,7 +35,12 @@ export const saveCSV = async (csvContent, defaultFilename) => {
 export const buildCurveCSV = (headers, data) => {
   const headerRow = headers.map((col) => col.label).join(',');
   const dataRows = data.map((row) =>
-    headers.map((col) => row[col.key] ?? '').join(',')
+    headers.map((col) => {
+      const val = row[col.key];
+      if (val == null) return '';
+      if (typeof val === 'number') return val.toFixed(5);
+      return val;
+    }).join(',')
   );
   return [headerRow, ...dataRows].join('\n');
 };

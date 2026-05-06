@@ -353,6 +353,85 @@
   background: #2b6cb0;
 }
 
+/* 고장 유형 배지 래퍼: 호버 툴팁의 기준 위치 */
+.fault-badge-wrapper {
+  position: relative;
+  display: inline-block;
+  margin: 1px 2px;
+}
+
+/* 고장 유형 배지 */
+.fault-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  background: rgba(229, 62, 62, 0.12);
+  color: #c53030;
+  border: 1px solid rgba(229, 62, 62, 0.3);
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* 정상 표시 */
+.fault-normal {
+  font-size: 12px;
+  color: #38a169;
+}
+
+/* 고장 유형 호버 툴팁 */
+.fault-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 100;
+  min-width: 220px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-h);
+  text-align: left;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.fault-badge-wrapper:hover .fault-tooltip {
+  display: block;
+}
+
+.fault-tooltip-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: #c53030;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.fault-tooltip-time {
+  color: var(--text);
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+
+.fault-tooltip-detail {
+  color: var(--text-h);
+}
+
+.fault-tooltip-deviation {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border);
+  color: #c53030;
+  font-weight: 600;
+}
+
 /* 기준행 미지정 안내 문구 (힌트 스타일) */
 .no-data-hint {
   color: var(--text);
