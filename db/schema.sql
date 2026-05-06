@@ -19,6 +19,10 @@ CREATE TABLE measurementInfo (
     temp1 REAL, temp2 REAL, temp3 REAL, temp4 REAL, temp5 REAL, ambientTemp REAL,
     -- STC 보정 최대 전력 지점
     vmaxStc REAL, imaxStc REAL, pmaxStc REAL,
+    -- STC 보정 외삽 단락전류/개방전압
+    iscStc REAL, vocStc REAL,
+    -- 검출된 고장 유형 ("1,3,5" 형식, NULL=정상, IEC 62446-1 기준)
+    faultTypes TEXT,
     --필터링 및 분석 결과 조건 [0:사용불가, 1:표준(10쌍+ALL PASS), 2:임시(2쌍+ALL PASS), 3:R²미달]
     caseLevel INTEGER DEFAULT 0,
     --중복 저장을 막는 핵심 제약 조건
