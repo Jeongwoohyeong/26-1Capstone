@@ -226,10 +226,17 @@ const buildChannelCurveData = (selectedIds, curvesMap) => {
     if (!data || data.length === 0) return;
 
     data.forEach((point) => {
+      // vMeasured가 null인 외삽 끝점은 채널 차트(X축=vMeasured)에서 제외
+      if (point.vMeasured === null || point.vMeasured === undefined) return;
       combined.push({
         vMeasured: point.vMeasured,
         [`iMeasured_${id}`]: point.iMeasured,
         [`iStc_${id}`]: point.iStc,
+        [`vStc_${id}`]: point.vStc,
+        // powerStc는 DB 저장 없이 프론트에서 즉시 계산
+        [`powerStc_${id}`]: point.vStc != null && point.iStc != null
+          ? point.vStc * point.iStc
+          : null,
       });
     });
   });
@@ -237,6 +244,43 @@ const buildChannelCurveData = (selectedIds, curvesMap) => {
   // X축(vMeasured) 기준 오름차순 정렬
   combined.sort((a, b) => a.vMeasured - b.vMeasured);
   return combined;
+};
+
+/**
+ * IV 커브 차트 커스텀 툴팁
+ * 호버 시 선택된 각 행의 ID, Istc, Vstc, Pstc를 위→아래 순으로 표시
+ */
+const CurveTooltip = ({ active, payload }) => {
+  if (!active || !payload || payload.length === 0) return null;
+  const point = payload[0].payload;
+
+  const ids = Object.keys(point)
+    .filter((key) => key.startsWith('iStc_') && point[key] != null)
+    .map((key) => Number(key.replace('iStc_', '')));
+
+  if (ids.length === 0) return null;
+
+  return (
+    <div style={{
+      background: 'var(--bg)',
+      border: '1px solid var(--border)',
+      borderRadius: '6px',
+      padding: '8px 12px',
+      fontSize: '12px',
+      lineHeight: '1.8',
+    }}>
+      {ids.map((id, idx) => (
+        <div key={id} style={{ marginTop: idx > 0 ? '8px' : 0 }}>
+          <div style={{ fontWeight: 700, color: SELECTION_COLORS[id % SELECTION_COLORS.length] }}>
+            ID: {id}
+          </div>
+          <div>Istc: {point[`iStc_${id}`]?.toFixed(4)} A</div>
+          <div>Vstc: {point[`vStc_${id}`]?.toFixed(4)} V</div>
+          <div>Pstc: {point[`powerStc_${id}`]?.toFixed(4)} W</div>
+        </div>
+      ))}
+    </div>
+  );
 };
 
 /**
@@ -473,12 +517,7 @@ function ChannelTable({
                         }}
                         stroke="var(--text)"
                       />
-                      <Tooltip
-                        contentStyle={{
-                          background: 'var(--bg)',
-                          border: '1px solid var(--border)',
-                        }}
-                      />
+                      <Tooltip content={<CurveTooltip />} />
                       <Legend
                         verticalAlign="bottom"
                         wrapperStyle={{ bottom: 10 }}
@@ -545,7 +584,17 @@ function ChannelTable({
                             ? formatMeasTimeForFilename(measurement.measTime)
                             : String(primaryMeasurementId);
                           const filename = `${channel}_${timeStr}_normalized.csv`;
-                          await saveCSV(buildCurveCSV(CURVE_COLUMNS, primaryCurveData), filename);
+                          const csvColumns = [
+                            ...CURVE_COLUMNS,
+                            { key: 'powerStc', label: 'P (STC)' },
+                          ];
+                          const csvData = primaryCurveData.map((point) => ({
+                            ...point,
+                            powerStc: point.vStc != null && point.iStc != null
+                              ? point.vStc * point.iStc
+                              : null,
+                          }));
+                          await saveCSV(buildCurveCSV(csvColumns, csvData), filename);
                         }}
                       >
                         CSV 내보내기
