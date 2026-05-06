@@ -18,6 +18,15 @@ G_STC = 1000.0               # STC 목표 일사량 [W/m²]
 T_STC = 25.0                 # STC 목표 온도 [°C]
 MIN_IRRADIANCE = 300.0       # 최소 일사량 기준 [W/m²]
 
+# ── 고장 검출 기준값 (정상 패널 STC 측정 기반) ─────────────────────
+NORMAL_ISC_STC = 11.92       # 정상 단락전류 [A]
+NORMAL_VOC_STC = 53.24       # 정상 개방전압 [V]
+NORMAL_VRATIO  = 0.804       # 정상 vmaxStc / vocStc 비율
+NORMAL_IRATIO  = 0.948       # 정상 imaxStc / iscStc 비율
+NORMAL_FF      = 0.762       # 정상 충전율 (Fill Factor)
+FAULT_THRESHOLD = 0.90       # 고장 판단 임계값 (정상의 90% 미만)
+STEP_CURVATURE_THRESHOLD = 0.5   # 변동 1 (계단) 검출용 2차 미분 임계값
+
 
 # 6.5절 방법으로 내부 직렬 저항 Rs 계산 + case 분류
 def calculateRs(            #Rs값은 논문에 있는 식으로 직접 구해야함
@@ -243,6 +252,113 @@ def findMaxPowerPoint(stcResults: List[Dict]) -> Dict:
         "imaxStc": round(imaxStc, 6),
         "pmaxStc": round(pmaxStc, 6),
     }
+
+
+# STC 보정된 곡선의 끝점 두 개로 iscStc, vocStc를 외삽한다.
+def extrapolateIscVocStc(stcResults: List[Dict]) -> Dict:
+    """
+    STC 보정 곡선의 양 끝점들을 사용해 iscStc(V=0)와 vocStc(I=0)를 외삽한다.
+
+    Parameters
+    ----------
+    stcResults : convertToStc()의 반환 리스트 (vStc 오름차순 정렬)
+
+    Returns
+    -------
+    dict : {"iscStc": float, "vocStc": float}
+           점이 부족하면 None
+    """
+    if not stcResults or len(stcResults) < 2:
+        return {"iscStc": None, "vocStc": None}
+
+    # iscStc 외삽 (V=0): 처음 2점으로 선형 외삽
+    v0, i0 = stcResults[0]["vStc"], stcResults[0]["iStc"]
+    v1, i1 = stcResults[1]["vStc"], stcResults[1]["iStc"]
+    if v1 != v0:
+        slopeStart = (i1 - i0) / (v1 - v0)
+        iscStc = i0 - slopeStart * v0
+    else:
+        iscStc = i0
+
+    # vocStc 외삽 (I=0): 마지막 2점으로 선형 외삽
+    vN1, iN1 = stcResults[-2]["vStc"], stcResults[-2]["iStc"]
+    vN, iN = stcResults[-1]["vStc"], stcResults[-1]["iStc"]
+    if iN != iN1:
+        slopeEnd = (iN - iN1) / (vN - vN1)
+        vocStc = vN - iN / slopeEnd
+    else:
+        vocStc = vN
+
+    return {
+        "iscStc": round(iscStc, 6),
+        "vocStc": round(vocStc, 6),
+    }
+
+
+# STC 보정 곡선에서 6가지 고장 유형(IEC 62446-1 부속서 D)을 검출한다.
+def detectFaults(stcResults: List[Dict], maxPowerPoint: Dict, iscVocStc: Dict) -> List[int]:
+    """
+    6가지 변동을 검출하여 발생한 변동 번호 리스트를 반환한다.
+
+    Parameters
+    ----------
+    stcResults     : STC 보정 결과 (vStc 오름차순)
+    maxPowerPoint  : findMaxPowerPoint() 반환값 (vmaxStc, imaxStc, pmaxStc)
+    iscVocStc      : extrapolateIscVocStc() 반환값 (iscStc, vocStc)
+
+    Returns
+    -------
+    list of int : [1, 3, 5] 처럼 검출된 변동 번호 리스트. 정상이면 빈 리스트.
+    """
+    faults = []
+
+    if not stcResults or maxPowerPoint["pmaxStc"] is None:
+        return faults
+
+    iscStc = iscVocStc["iscStc"]
+    vocStc = iscVocStc["vocStc"]
+    vmaxStc = maxPowerPoint["vmaxStc"]
+    imaxStc = maxPowerPoint["imaxStc"]
+    pmaxStc = maxPowerPoint["pmaxStc"]
+
+    # ── 변동 1: 계단형 커브 (2차 미분 급변 검출) ──────────────────
+    vArray = np.array([row["vStc"] for row in stcResults])
+    iArray = np.array([row["iStc"] for row in stcResults])
+    if len(vArray) >= 4:
+        dvSafe = np.where(np.diff(vArray) == 0, 1e-9, np.diff(vArray))
+        firstDerivative = np.diff(iArray) / dvSafe
+        secondDerivative = np.diff(firstDerivative)
+        abnormalCount = int(np.sum(np.abs(secondDerivative) > STEP_CURVATURE_THRESHOLD))
+        if abnormalCount >= 2:
+            faults.append(1)
+
+    # ── 변동 2: 낮은 단락전류 ─────────────────────────────────────
+    if iscStc is not None and iscStc / NORMAL_ISC_STC < FAULT_THRESHOLD:
+        faults.append(2)
+
+    # ── 변동 3: 낮은 개방전압 ─────────────────────────────────────
+    if vocStc is not None and vocStc / NORMAL_VOC_STC < FAULT_THRESHOLD:
+        faults.append(3)
+
+    # ── 변동 4: 곡률 반경 증가 (FF 감소) ──────────────────────────
+    if iscStc and vocStc and iscStc > 0 and vocStc > 0:
+        ff = pmaxStc / (vocStc * iscStc)
+        if ff / NORMAL_FF < FAULT_THRESHOLD:
+            faults.append(4)
+
+    # ── 변동 5: 낮은 전압비 (수직 레그 완만) ──────────────────────
+    if vocStc and vocStc > 0:
+        vRatio = vmaxStc / vocStc
+        if vRatio / NORMAL_VRATIO < FAULT_THRESHOLD:
+            faults.append(5)
+
+    # ── 변동 6: 낮은 전류비 (수평 레그 가파름) ────────────────────
+    if iscStc and iscStc > 0:
+        iRatio = imaxStc / iscStc
+        if iRatio / NORMAL_IRATIO < FAULT_THRESHOLD:
+            faults.append(6)
+
+    return faults
 
 
 # ════════════════════════════════════════════════════════════════════
