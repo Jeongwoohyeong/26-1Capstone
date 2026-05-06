@@ -62,6 +62,86 @@ const FAULT_TYPE_FULL_LABELS = {
   6: '낮은 전류비',
 };
 
+// IEC 62446-1 정상 기준값 (제조사 스펙 기반, Calculator.py와 동일)
+const NORMAL_ISC_STC = 11.38;   // [A]
+const NORMAL_VOC_STC = 54.1;    // [V]
+const NORMAL_VRATIO  = 0.836;   // vmaxStc / vocStc
+const NORMAL_IRATIO  = 0.944;   // imaxStc / iscStc
+const NORMAL_FF      = 0.788;   // 충전율
+// 계단형 커브 검출용 2차 미분 임계값
+const STEP_CURVATURE_THRESHOLD = 0.5;
+
+/**
+ * STC 커브의 2차 미분 급변 지점(이상 포인트) 인덱스를 반환
+ * Calculator.py의 detectFaults 변동 1 로직과 동일한 알고리즘
+ */
+const findStepAnomalousIndices = (curveData) => {
+  if (!curveData) return [];
+  const valid = curveData.filter((p) => p.vStc != null && p.iStc != null);
+  if (valid.length < 4) return [];
+
+  // 1차 미분 (구간별)
+  const firstDeriv = [];
+  for (let k = 0; k < valid.length - 1; k++) {
+    const dv = valid[k + 1].vStc - valid[k].vStc;
+    const dvSafe = dv === 0 ? 1e-9 : dv;
+    firstDeriv.push((valid[k + 1].iStc - valid[k].iStc) / dvSafe);
+  }
+
+  // 2차 미분 임계 초과 → 중간 인덱스 (k+1) 가 이상 포인트
+  const indices = [];
+  for (let k = 0; k < firstDeriv.length - 1; k++) {
+    if (Math.abs(firstDeriv[k + 1] - firstDeriv[k]) > STEP_CURVATURE_THRESHOLD) {
+      indices.push(k + 1);
+    }
+  }
+  return indices;
+};
+
+/**
+ * 이상 포인트의 vStc 값 Set 반환 (차트에서 매칭용)
+ */
+const getAnomalousVStcSet = (curveData) => {
+  const indices = findStepAnomalousIndices(curveData);
+  const valid = curveData ? curveData.filter((p) => p.vStc != null && p.iStc != null) : [];
+  return new Set(indices.map((i) => valid[i].vStc));
+};
+
+/**
+ * 고장 유형별 편차% 계산 (정상 기준 대비)
+ * 반환: { ratio, deviationPct, reference, measured, unit, label } | null
+ *  - 계단형(1)은 quantitative 비교 불가 → null
+ */
+const calculateFaultMetric = (faultType, m) => {
+  switch (faultType) {
+    case 2: {
+      const ratio = m.iscStc / NORMAL_ISC_STC;
+      return { ratio, deviationPct: (ratio - 1) * 100, reference: NORMAL_ISC_STC, measured: m.iscStc, unit: 'A', label: '단락전류 (Isc)' };
+    }
+    case 3: {
+      const ratio = m.vocStc / NORMAL_VOC_STC;
+      return { ratio, deviationPct: (ratio - 1) * 100, reference: NORMAL_VOC_STC, measured: m.vocStc, unit: 'V', label: '개방전압 (Voc)' };
+    }
+    case 4: {
+      const ff = m.pmaxStc / (m.vocStc * m.iscStc);
+      const ratio = ff / NORMAL_FF;
+      return { ratio, deviationPct: (ratio - 1) * 100, reference: NORMAL_FF, measured: ff, unit: '', label: '충전율 (FF)' };
+    }
+    case 5: {
+      const vRatio = m.vmaxStc / m.vocStc;
+      const ratio = vRatio / NORMAL_VRATIO;
+      return { ratio, deviationPct: (ratio - 1) * 100, reference: NORMAL_VRATIO, measured: vRatio, unit: '', label: 'Vmax/Voc' };
+    }
+    case 6: {
+      const iRatio = m.imaxStc / m.iscStc;
+      const ratio = iRatio / NORMAL_IRATIO;
+      return { ratio, deviationPct: (ratio - 1) * 100, reference: NORMAL_IRATIO, measured: iRatio, unit: '', label: 'Imax/Isc' };
+    }
+    default:
+      return null;
+  }
+};
+
 // 측정 정보 테이블 컬럼 정의
 const TABLE_COLUMNS = [
   { key: 'measurementId', label: 'ID' },
@@ -239,12 +319,19 @@ const applyFilters = (rows, filter) => {
  * 예: [{ vMeasured: 1.5, iMeasured_5: 3.2, iStc_5: 3.1, iMeasured_12: 3.0, iStc_12: 2.9 }, ...]
  * recharts의 connectNulls=true 로 행별 포인트를 자연스럽게 잇는다.
  */
-const buildChannelCurveData = (selectedIds, curvesMap) => {
+const buildChannelCurveData = (selectedIds, curvesMap, faultTypesById = {}) => {
   const combined = [];
 
   selectedIds.forEach((id) => {
     const data = curvesMap[id];
     if (!data || data.length === 0) return;
+
+    // 백엔드가 계단형(변동 1)으로 분류한 측정만 이상 포인트 강조
+    // 다른 고장(낮은 Voc/Isc 등)에서 우연히 2차 미분 임계 초과 점이 있어도 무시
+    const hasStepFault = (faultTypesById[id] ?? '').split(',').includes('1');
+    const anomalousVStcSet = hasStepFault
+      ? getAnomalousVStcSet(data)
+      : new Set();
 
     data.forEach((point) => {
       // vMeasured가 null인 외삽 끝점은 채널 차트(X축=vMeasured)에서 제외
@@ -258,6 +345,7 @@ const buildChannelCurveData = (selectedIds, curvesMap) => {
         [`powerStc_${id}`]: point.vStc != null && point.iStc != null
           ? point.vStc * point.iStc
           : null,
+        [`anomalous_${id}`]: anomalousVStcSet.has(point.vStc),
       });
     });
   });
@@ -301,6 +389,59 @@ const CurveTooltip = ({ active, payload }) => {
         </div>
       ))}
     </div>
+  );
+};
+
+/**
+ * 고장 유형 배지 + 호버 시 상세 툴팁
+ *
+ * 배지: 짧은 이름 + 편차%(quantitative 검출만)
+ * 툴팁: 측정시각, 기준값, 측정값, 편차%
+ *  - 계단형(1)은 quantitative 비교 불가 → 이상 포인트 개수 표시 (커브 로드된 경우)
+ */
+const FaultBadge = ({ faultType, measurement, curveData }) => {
+  const fullName = FAULT_TYPE_FULL_LABELS[faultType] ?? `변동${faultType}`;
+  const shortName = FAULT_TYPE_LABELS[faultType] ?? `변동${faultType}`;
+
+  // 계단형 커브: 이상 포인트 개수 (커브 로드된 경우만 정확값)
+  const stepAnomalyCount = faultType === 1 && curveData
+    ? findStepAnomalousIndices(curveData).length
+    : null;
+
+  // 정량 비교 가능 변동(2~6): 편차% 계산
+  const metric = calculateFaultMetric(faultType, measurement);
+
+  // 배지는 짧은 이름만 표시 (편차%는 호버 툴팁에서 확인)
+  const badgeLabel = shortName;
+
+  return (
+    <span className="fault-badge-wrapper">
+      <span className="fault-badge">{badgeLabel}</span>
+      <div className="fault-tooltip">
+        <div className="fault-tooltip-title">{fullName}</div>
+        <div className="fault-tooltip-time">측정시각: {measurement.measTime}</div>
+        {faultType === 1 ? (
+          stepAnomalyCount != null ? (
+            <div className="fault-tooltip-detail">
+              이상 포인트 <strong>{stepAnomalyCount}개</strong> 검출 (기준: 2개 이상)
+            </div>
+          ) : (
+            <div className="fault-tooltip-detail" style={{ color: 'var(--text)' }}>
+              행을 클릭하면 이상 포인트 개수가 표시됩니다
+            </div>
+          )
+        ) : metric ? (
+          <div className="fault-tooltip-detail">
+            <div>{metric.label}</div>
+            <div>기준: <strong>{metric.reference.toFixed(metric.unit ? 2 : 4)}</strong> {metric.unit}</div>
+            <div>측정: <strong>{metric.measured?.toFixed(metric.unit ? 2 : 4)}</strong> {metric.unit} ({(metric.ratio * 100).toFixed(1)}%)</div>
+            <div className="fault-tooltip-deviation">
+              편차: {metric.deviationPct.toFixed(1)}%
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </span>
   );
 };
 
@@ -384,8 +525,14 @@ function ChannelTable({
     ? (curvesBySelectedId[primaryMeasurementId] || null)
     : null;
 
+  // measurementId → faultTypes 룩업 (계단형 이상 포인트 강조 게이팅용)
+  const faultTypesById = data.reduce((acc, row) => {
+    if (row.faultTypes) acc[row.measurementId] = row.faultTypes;
+    return acc;
+  }, {});
+
   // 다중 라인 IV 차트 데이터 (선택된 모든 행 합산)
-  const channelCurveChartData = buildChannelCurveData(selectedIds, curvesBySelectedId);
+  const channelCurveChartData = buildChannelCurveData(selectedIds, curvesBySelectedId, faultTypesById);
 
   return (
     <div className="channel-table">
@@ -442,13 +589,12 @@ function ChannelTable({
                           {col.key === 'faultTypes'
                             ? row.faultTypes
                               ? row.faultTypes.split(',').map((n) => (
-                                  <span
+                                  <FaultBadge
                                     key={n}
-                                    className="fault-badge"
-                                    title={FAULT_TYPE_FULL_LABELS[Number(n)]}
-                                  >
-                                    {FAULT_TYPE_LABELS[Number(n)] ?? `변동${n}`}
-                                  </span>
+                                    faultType={Number(n)}
+                                    measurement={row}
+                                    curveData={curvesBySelectedId[row.measurementId]}
+                                  />
                                 ))
                               : <span className="fault-normal">정상</span>
                             : (row[col.key] ?? '-')}
@@ -579,14 +725,31 @@ function ChannelTable({
                               connectNulls
                             />
                           ),
-                          // STC 정규화 커브: 항상 표시
+                          // STC 정규화 커브: 항상 표시 (계단형 이상 포인트는 빨간 점으로 강조)
                           <Line
                             key={`iStc_${id}`}
                             type="monotone"
                             dataKey={`iStc_${id}`}
                             name={`STC (ID:${id})`}
                             stroke={color}
-                            dot={false}
+                            dot={(props) => {
+                              const isAnomalous = props.payload?.[`anomalous_${id}`];
+                              if (!isAnomalous) {
+                                // 이상 포인트가 아니면 점 미표시 (recharts에 안전한 빈 SVG 반환)
+                                return <circle key={`dot-${id}-${props.index}`} r={0} />;
+                              }
+                              return (
+                                <circle
+                                  key={`dot-${id}-${props.index}`}
+                                  cx={props.cx}
+                                  cy={props.cy}
+                                  r={4.5}
+                                  fill="#e53e3e"
+                                  stroke="white"
+                                  strokeWidth={1.5}
+                                />
+                              );
+                            }}
                             strokeWidth={strokeWidth}
                             strokeOpacity={strokeOpacity}
                             strokeDasharray={isPrimary ? '' : '5 5'}
