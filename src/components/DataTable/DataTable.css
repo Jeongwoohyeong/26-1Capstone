@@ -353,6 +353,26 @@
   background: #2b6cb0;
 }
 
+/* 고장 유형 배지 */
+.fault-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  margin: 1px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  background: rgba(229, 62, 62, 0.12);
+  color: #c53030;
+  border: 1px solid rgba(229, 62, 62, 0.3);
+  white-space: nowrap;
+}
+
+/* 정상 표시 */
+.fault-normal {
+  font-size: 12px;
+  color: #38a169;
+}
+
 /* 기준행 미지정 안내 문구 (힌트 스타일) */
 .no-data-hint {
   color: var(--text);

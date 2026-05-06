@@ -42,10 +42,31 @@ const CASE_OPTIONS = [
   { value: 0, label: 'Case 0 (조건/일사량 미달, 사용불가)' },
 ];
 
+// IEC 62446-1 고장 유형 번호 → 레이블 매핑
+const FAULT_TYPE_LABELS = {
+  1: '계단형',
+  2: '낮은Isc',
+  3: '낮은Voc',
+  4: '경사면',
+  5: '낮은V비',
+  6: '낮은I비',
+};
+
+// IEC 62446-1 고장 유형 전체 이름 (툴팁용)
+const FAULT_TYPE_FULL_LABELS = {
+  1: '계단형 커브',
+  2: '낮은 단락전류',
+  3: '낮은 개방전압',
+  4: '경사면 변화',
+  5: '낮은 전압비',
+  6: '낮은 전류비',
+};
+
 // 측정 정보 테이블 컬럼 정의
 const TABLE_COLUMNS = [
   { key: 'measurementId', label: 'ID' },
   { key: 'measTime', label: '측정시각' },
+  { key: 'faultTypes', label: '고장 유형' },
   { key: 'irradiance', label: '일사량' },
   { key: 'voc', label: 'Voc' },
   { key: 'isc', label: 'Isc' },
@@ -417,7 +438,21 @@ function ChannelTable({
                         />
                       </td>
                       {TABLE_COLUMNS.map((col) => (
-                        <td key={col.key}>{row[col.key] ?? '-'}</td>
+                        <td key={col.key}>
+                          {col.key === 'faultTypes'
+                            ? row.faultTypes
+                              ? row.faultTypes.split(',').map((n) => (
+                                  <span
+                                    key={n}
+                                    className="fault-badge"
+                                    title={FAULT_TYPE_FULL_LABELS[Number(n)]}
+                                  >
+                                    {FAULT_TYPE_LABELS[Number(n)] ?? `변동${n}`}
+                                  </span>
+                                ))
+                              : <span className="fault-normal">정상</span>
+                            : (row[col.key] ?? '-')}
+                        </td>
                       ))}
                     </tr>
                   ))}
