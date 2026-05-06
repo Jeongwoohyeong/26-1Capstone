@@ -7,7 +7,7 @@ import sqlite3
 import pandas as pd
 from typing import List, Dict, Optional
 from Parser import parseRawDataFile
-from Calculator import calculateRs, convertToStc, findMaxPowerPoint
+from Calculator import calculateRs, convertToStc, findMaxPowerPoint, extrapolateIscVocStc, detectFaults
 
 # 동일 (measTime, channel) 조합의 기존 측정 정보 조회
 def findExistingMeasurement(
@@ -94,9 +94,11 @@ def saveData(
         data["irradiance"],
     )
 
-    # ── 4. STC 보정 + 최대 전력 지점 계산 (case 0이면 보정 안 함) ───
+    # ── 4. STC 보정 + 최대 전력 지점 + 외삽 + 고장 검출 ────────────
     stcResults = []
     maxPowerPoint = {"vmaxStc": None, "imaxStc": None, "pmaxStc": None}
+    iscVocStc = {"iscStc": None, "vocStc": None}
+    faults = []
     if rsResult["case"] > 0:
         dfCurve = pd.DataFrame({
             "G1":   data["irradiance"],
@@ -107,6 +109,10 @@ def saveData(
         })
         stcResults = convertToStc(dfCurve, rs=rsResult["rs"])
         maxPowerPoint = findMaxPowerPoint(stcResults)
+        iscVocStc = extrapolateIscVocStc(stcResults)
+        faults = detectFaults(stcResults, maxPowerPoint, iscVocStc)
+
+    faultTypes = ",".join(str(f) for f in faults) if faults else None
 
     # ── 5. 측정 정보 테이블에 저장 ─────────────────────────────────
     # 2번 중복 검사와 INSERT 사이에 다른 요청이 같은 행을 먼저 넣는
@@ -117,8 +123,9 @@ def saveData(
             INSERT INTO measurementInfo (
                 measTime, channel, irradiance, isc, voc, vmax, imax, pmax,
                 fillFactor, centerTemp, temp1, temp2, temp3, temp4, temp5,
-                ambientTemp, caseLevel, vmaxStc, imaxStc, pmaxStc
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ambientTemp, caseLevel, vmaxStc, imaxStc, pmaxStc,
+                iscStc, vocStc, faultTypes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data["measTime"],
@@ -141,6 +148,9 @@ def saveData(
                 maxPowerPoint["vmaxStc"],
                 maxPowerPoint["imaxStc"],
                 maxPowerPoint["pmaxStc"],
+                iscVocStc["iscStc"],
+                iscVocStc["vocStc"],
+                faultTypes,
             ),
         )
     except sqlite3.IntegrityError:
@@ -194,13 +204,14 @@ def saveData(
     }
 
 
-# 특정 측정 ID의 I-V 커브 데이터 조회
+# 특정 측정 ID의 I-V 커브 데이터 조회 (양 끝점 외삽값 포함)
 def getCurveData(
     connection: sqlite3.Connection,
     measurementId: int,
 ) -> List[Dict]:
     """
     특정 측정의 I-V 커브 데이터를 조회한다.
+    STC 보정 곡선의 양 끝점은 measurementInfo의 외삽값(iscStc, vocStc)으로 보강한다.
 
     Parameters
     ----------
@@ -210,6 +221,7 @@ def getCurveData(
     Returns
     -------
     list of dict : [{"vMeasured", "iMeasured", "powerMeasured", "vStc", "iStc"}, ...]
+                   측정 50개 + (외삽 가능 시) 양 끝점 2개
     """
     cursor = connection.execute(
         """
@@ -221,16 +233,54 @@ def getCurveData(
         (measurementId,),
     )
 
-    return [
+    points = [
         {
-            "vMeasured": row[0],
-            "iMeasured": row[1],
-            "powerMeasured":     row[2],
-            "vStc":      row[3],
-            "iStc":      row[4],
+            "vMeasured":     row[0],
+            "iMeasured":     row[1],
+            "powerMeasured": row[2],
+            "vStc":          row[3],
+            "iStc":          row[4],
         }
         for row in cursor.fetchall()
     ]
+
+    # ── measurementInfo에서 외삽값 조회 ───────────────────────────
+    extremeCursor = connection.execute(
+        """
+        SELECT iscStc, vocStc
+        FROM measurementInfo
+        WHERE measurementId = ?
+        """,
+        (measurementId,),
+    )
+    extremeRow = extremeCursor.fetchone()
+
+    if extremeRow is None or not points:
+        return points
+
+    iscStc, vocStc = extremeRow
+
+    # ── 앞에 (vStc=0, iStc=iscStc) 점 추가 ─────────────────────────
+    if iscStc is not None:
+        points.insert(0, {
+            "vMeasured":     None,
+            "iMeasured":     None,
+            "powerMeasured": None,
+            "vStc":          0.0,
+            "iStc":          iscStc,
+        })
+
+    # ── 뒤에 (vStc=vocStc, iStc=0) 점 추가 ─────────────────────────
+    if vocStc is not None:
+        points.append({
+            "vMeasured":     None,
+            "iMeasured":     None,
+            "powerMeasured": None,
+            "vStc":          vocStc,
+            "iStc":          0.0,
+        })
+
+    return points
 
 
 # 측정 정보 목록 조회 (채널/case 필터링 가능)
