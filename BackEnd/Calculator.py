@@ -18,12 +18,12 @@ G_STC = 1000.0               # STC 목표 일사량 [W/m²]
 T_STC = 25.0                 # STC 목표 온도 [°C]
 MIN_IRRADIANCE = 300.0       # 최소 일사량 기준 [W/m²]
 
-# ── 고장 검출 기준값 (정상 패널 STC 측정 기반) ─────────────────────
-NORMAL_ISC_STC = 11.92       # 정상 단락전류 [A]
-NORMAL_VOC_STC = 53.24       # 정상 개방전압 [V]
-NORMAL_VRATIO  = 0.804       # 정상 vmaxStc / vocStc 비율
-NORMAL_IRATIO  = 0.948       # 정상 imaxStc / iscStc 비율
-NORMAL_FF      = 0.762       # 정상 충전율 (Fill Factor)
+# ── 고장 검출 기준값 (제조사 스펙 기반) ───────────────────────────
+NORMAL_ISC_STC = 11.38       # 정상 단락전류 [A] (제조사 스펙)
+NORMAL_VOC_STC = 54.1        # 정상 개방전압 [V] (제조사 스펙)
+NORMAL_VRATIO  = 0.836       # 정상 vmaxStc / vocStc 비율 (45.2/54.1)
+NORMAL_IRATIO  = 0.944       # 정상 imaxStc / iscStc 비율 (10.74/11.38)
+NORMAL_FF      = 0.788       # 정상 충전율 (485/(54.1×11.38))
 FAULT_THRESHOLD = 0.90       # 고장 판단 임계값 (정상의 90% 미만)
 STEP_CURVATURE_THRESHOLD = 0.5   # 변동 1 (계단) 검출용 2차 미분 임계값
 
