@@ -62,6 +62,18 @@ const FAULT_TYPE_FULL_LABELS = {
   6: '낮은 전류비',
 };
 
+// 고장 유형 필터 옵션 (정상 + 6종 변동)
+// value 'normal' 은 faultTypes 가 비어있는 행을 의미한다
+const FAULT_TYPE_FILTER_OPTIONS = [
+  { value: 'normal', label: '정상' },
+  { value: '1', label: '계단형 커브' },
+  { value: '2', label: '낮은 단락전류' },
+  { value: '3', label: '낮은 개방전압' },
+  { value: '4', label: '경사면 변화' },
+  { value: '5', label: '낮은 전압비' },
+  { value: '6', label: '낮은 전류비' },
+];
+
 // IEC 62446-1 정상 기준값 (제조사 스펙 기반, Calculator.py와 동일)
 const NORMAL_ISC_STC = 11.38;   // [A]
 const NORMAL_VOC_STC = 54.1;    // [V]
@@ -258,12 +270,14 @@ const FILTER_ROWS = [
 /**
  * 필터 입력 상태의 초기값 (모든 필드 빈 문자열 = "제한 없음")
  * 시간대 4필드 + 숫자 필터별 Min/Max 2필드 × N
+ * faultTypes: 선택된 고장 유형 value 배열, 빈 배열이면 전체 표시
  */
 const EMPTY_FILTER = {
   startDate: '',
   startTime: '',
   endDate: '',
   endTime: '',
+  faultTypes: [],
   ...Object.fromEntries(
     NUMERIC_FILTERS.flatMap(({ key }) => [
       [`${key}Min`, ''],
@@ -294,6 +308,9 @@ const applyFilters = (rows, filter) => {
     max: toNum(filter[`${key}Max`]),
   }));
 
+  // 고장 유형 필터: 선택된 유형 중 하나라도 매칭되면 통과 (OR)
+  const selectedFaultTypes = filter.faultTypes || [];
+
   return rows.filter((row) => {
     // 시간대 필터
     if (startDt || endDt) {
@@ -307,6 +324,15 @@ const applyFilters = (rows, filter) => {
       const value = row[key];
       if (min !== null && !(value >= min)) return false;
       if (max !== null && !(value <= max)) return false;
+    }
+    // 고장 유형 필터: 선택이 있을 때만 적용
+    if (selectedFaultTypes.length > 0) {
+      const rowFaults = row.faultTypes ? row.faultTypes.split(',') : [];
+      const isNormal = rowFaults.length === 0;
+      const matches = selectedFaultTypes.some((sel) =>
+        sel === 'normal' ? isNormal : rowFaults.includes(sel)
+      );
+      if (!matches) return false;
     }
     return true;
   });
@@ -950,6 +976,17 @@ function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
     setFilterDraft((prev) => ({ ...prev, [key]: value }));
   };
 
+  // 고장 유형 체크박스 토글 (선택/해제)
+  const handleFaultTypeToggle = (value) => {
+    setFilterDraft((prev) => {
+      const current = prev.faultTypes || [];
+      const next = current.includes(value)
+        ? current.filter((v) => v !== value)
+        : [...current, value];
+      return { ...prev, faultTypes: next };
+    });
+  };
+
   // 적용 버튼: 모든 채널 선택/커브 해제 후 필터 적용
   const handleApplyFilter = () => {
     setAppliedFilter(filterDraft);
@@ -1243,6 +1280,30 @@ function DataTable({ refreshKey, isUploadOpen, onToggleUpload, uploadPanel }) {
               })}
             </div>
           ))}
+
+          {/* 고장 유형 필터: 접이식 그룹 (체크박스 다중 선택, OR) */}
+          <details className="fault-filter-details">
+            <summary className="fault-filter-summary">
+              고장 유형 필터
+              {filterDraft.faultTypes.length > 0 && (
+                <span className="fault-filter-count">
+                  {filterDraft.faultTypes.length}개 선택
+                </span>
+              )}
+            </summary>
+            <div className="fault-filter-options">
+              {FAULT_TYPE_FILTER_OPTIONS.map((option) => (
+                <label key={option.value} className="fault-filter-option">
+                  <input
+                    type="checkbox"
+                    checked={filterDraft.faultTypes.includes(option.value)}
+                    onChange={() => handleFaultTypeToggle(option.value)}
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          </details>
 
           {/* 적용/초기화 버튼: 필터 패널 하단에 배치 */}
           <div className="range-filter-row range-filter-buttons-row">
